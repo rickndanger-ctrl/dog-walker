@@ -22,6 +22,8 @@ ShellRoot {
     property bool active: false
     property bool external: false
     property bool review: false
+    property string reviewId: ""
+    property var companionReplies: ({})
     property bool online: false
     property var health: ({})
     property string error: ""
@@ -31,6 +33,8 @@ ShellRoot {
     property bool details: false
     property string importOnReady: Quickshell.env("DOG_WALKER_OPEN_FILE") || ""
     readonly property string statusText: !state ? "Ready for a walk" : external ? "Open in another window" : review ? "Needs your review" : state.status === "completed" ? "Walk complete" : state.status === "aborted" ? "Walk stopped" : state.status === "paused" ? "Walk paused" : state.phase === "evaluating" ? "Checking the work" : "Walking your model"
+    readonly property var shownResult: state ? state.result || (state.status === "completed" ? state.previous_result : null) : null
+    readonly property var shownEvaluation: state ? state.evaluation || (state.status === "completed" ? state.last_evaluation : null) : null
 
     function send(command) {
         if (!bridge.running || !online) { error = "The local engine is not connected. Close and reopen Dog Walker."; return }
@@ -38,6 +42,8 @@ ShellRoot {
     }
     function openPath(path) { if (path) Quickshell.execDetached(["xdg-open", path]) }
     function importFile(path) { error = ""; send({op: "import", path: path}) }
+    function control(action) { send({op: "control", action: action, run_id: state ? state.id : "", review_id: reviewId}) }
+    function resumeWalk() { send({op: "resume", run_id: state ? state.id : ""}) }
     function acceptMessage(m) {
         if (m.type === "hello") {
             online = true; health = m.health
@@ -46,6 +52,7 @@ ShellRoot {
             job = m.job; automatic = job.mode === "auto"; page = "new"; error = ""; details = false
         } else if (m.type === "state") {
             state = m.state; active = m.active; external = m.external; review = m.needs_review; reason = m.reason
+            reviewId = m.review_id || ""
             walkJob = m.job
         } else if (m.type === "selected") {
             page = "walk"; error = ""
@@ -61,8 +68,17 @@ ShellRoot {
             settingsDialog.open()
         } else if (m.type === "saved_settings") {
             settingsDialog.close()
+        } else if (m.type === "phone_info") {
+            phoneAddress.text = m.url; phoneCode.text = m.pair_code.match(/.{1,4}/g).join("-")
+            phoneInstructions.text = m.instructions; phoneDialog.open()
         } else if (m.type === "finished") {
             active = false; review = false
+        } else if (m.type === "command_result") {
+            var replies = Object.assign({}, companionReplies)
+            replies[m.request_id] = m
+            var keys = Object.keys(replies)
+            if (keys.length > 50) delete replies[keys[0]]
+            companionReplies = replies
         }
     }
     Process {
@@ -96,7 +112,7 @@ ShellRoot {
         }
         // Read-only diagnostics are also used by smoke tests; they do not start jobs.
         function snapshot(): string {
-            return JSON.stringify({page: app.page, connected: app.online, job: app.job ? app.job.name : "", state: app.state ? app.state.id : "", error: app.error, capture: app.captureResult})
+            return JSON.stringify({page: app.page, connected: app.online, job: app.job ? app.job.name : "", state: app.state ? app.state.id : "", error: app.error, capture: app.captureResult, progress: walkProgress.value})
         }
         function capture(path: string): string {
             app.captureResult = "pending"
@@ -105,6 +121,23 @@ ShellRoot {
         }
         function showWalk(id: string): string { app.send({op: "load", id: id}); return "requested" }
         function library(): string { app.page = "library"; return "ok" }
+        function companionSnapshot(): string {
+            return JSON.stringify({connected: app.online, active: app.active, external: app.external,
+                review: app.review, review_id: app.reviewId, reason: app.reason, state: app.state, job: app.walkJob})
+        }
+        function companionControl(payload: string): string {
+            try {
+                var cmd = JSON.parse(payload)
+                if (!app.online || !app.state || cmd.run_id !== app.state.id || app.external) return "unavailable"
+                if (["approve", "retry", "pause", "resume"].indexOf(cmd.action) < 0) return "rejected"
+                if (["approve", "retry"].indexOf(cmd.action) >= 0 && (!app.review || cmd.review_id !== app.reviewId)) return "stale"
+                app.send({op: cmd.action === "resume" ? "resume" : "control", action: cmd.action,
+                    run_id: cmd.run_id, review_id: cmd.review_id, request_id: cmd.request_id, source: "phone"})
+                return "sent"
+            } catch(e) { return "rejected" }
+        }
+        function companionReply(id: string): string { return JSON.stringify(app.companionReplies[id] || null) }
+        function showPhone(): string { window.visible = true; app.send({op: "phone"}); return "requested" }
     }
     FileDialog {
         id: fileDialog
@@ -156,8 +189,9 @@ ShellRoot {
                     Item { Layout.fillHeight: true }
                     Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: "#355649" }
                     ActionButton { Layout.fillWidth: true; text: "Local model settings"; dark: true; onClicked: app.send({op: "settings"}) }
+                    ActionButton { Layout.fillWidth: true; text: "Phone companion"; dark: true; onClicked: app.send({op: "phone"}) }
                     Copy { text: "●  No cloud connection"; font.pixelSize: 11; color: "#acd0b0" }
-                    Copy { text: "Dog Walker  /  0.2"; font.pixelSize: 10; color: "#7fa595" }
+                    Copy { text: "Dog Walker  /  0.3"; font.pixelSize: 10; color: "#7fa595" }
                 }
             }
             ColumnLayout {
@@ -250,6 +284,7 @@ ShellRoot {
                                 id: previewColumn; anchors.fill: parent; anchors.margins: 20; spacing: 14
                                 Copy { Layout.fillWidth: true; text: app.job ? app.job.name : ""; font.pixelSize: 22; font.weight: Font.DemiBold }
                                 Copy { Layout.fillWidth: true; text: app.job ? app.job.goal : ""; color: "#738073" }
+                                Copy { Layout.fillWidth: true; text: app.job && Array.isArray(app.job.allowed_changes) ? "Allowed file changes: " + (app.job.allowed_changes.join(", ") || "none (read only)") : "This job has no file allowlist. Its authored checks and protected files still apply."; font.pixelSize: 12; color: "#738073" }
                                 Repeater {
                                     model: app.job ? app.job.steps : []
                                     ColumnLayout {
@@ -343,7 +378,17 @@ ShellRoot {
                                     Item { Layout.fillWidth: true }
                                     Copy { text: app.state ? app.state.turns + " model turns" : ""; color: "#849080"; font.pixelSize: 11 }
                                 }
-                                ProgressBar { Layout.fillWidth: true; from: 0; to: app.walkJob ? app.walkJob.steps.length : 1; value: app.state ? app.state.history.length : 0 }
+                                ProgressBar {
+                                    id: walkProgress
+                                    Layout.fillWidth: true; from: 0
+                                    to: 1
+                                    value: app.state && app.walkJob && app.walkJob.steps.length ? app.state.history.length / app.walkJob.steps.length : 0
+                                    background: Rectangle { implicitHeight: 10; radius: 5; color: "#e4eadf" }
+                                    contentItem: Item {
+                                        implicitHeight: 10
+                                        Rectangle { width: parent.width * walkProgress.visualPosition; height: parent.height; radius: 5; color: "#467250" }
+                                    }
+                                }
                                 Repeater {
                                     model: app.walkJob ? app.walkJob.steps : []
                                     RowLayout {
@@ -365,20 +410,20 @@ ShellRoot {
                                 id: evidenceColumn; anchors.fill: parent; anchors.margins: 20; spacing: 12
                                 Copy { text: app.review ? "A hand on the leash." : app.state && app.state.status === "completed" ? "Your results are ready." : "What’s happening"; font.pixelSize: 21; font.weight: Font.DemiBold }
                                 Copy { Layout.fillWidth: true; text: app.external ? "This walk is controlled by another window. You can view progress here. Pause and close the other window before resuming here." : app.review ? app.reason : app.state && app.state.status === "completed" ? "Completion: " + (app.state.completion || "").replace(/_/g, " ") + ". Review your workspace before applying changes to the original project." : app.state && app.state.reason ? app.state.reason : "Your local model is working through the current step. Verification runs before the next checkpoint."; color: "#738073" }
-                                Copy { visible: !!(app.state && app.state.result); Layout.fillWidth: true; text: app.state && app.state.result ? app.state.result.summary : "" }
+                                Copy { visible: !!app.shownResult; Layout.fillWidth: true; text: app.shownResult ? app.shownResult.summary : "" }
                                 Repeater {
-                                    model: app.state && app.state.evaluation ? app.state.evaluation.checks : []
+                                    model: app.shownEvaluation ? app.shownEvaluation.checks : []
                                     Copy { required property var modelData; Layout.fillWidth: true; text: (modelData.pass ? "✓  " : "✕  ") + modelData.id; color: modelData.pass ? "#467250" : "#a63e35"; font.pixelSize: 12 }
                                 }
                                 RowLayout {
                                     visible: app.review && !app.external
-                                    ActionButton { text: "Approve & continue"; primary: true; enabled: !(app.state && app.state.evaluation && app.state.evaluation.checks.some(function(c) { return !c.pass })); onClicked: app.send({op: "control", action: "approve"}) }
-                                    ActionButton { text: "Retry step"; onClicked: app.send({op: "control", action: "retry"}) }
+                                    ActionButton { text: "Approve & continue"; primary: true; enabled: !(app.state && app.state.evaluation && app.state.evaluation.checks.some(function(c) { return !c.pass })); onClicked: app.control("approve") }
+                                    ActionButton { text: "Retry step"; onClicked: app.control("retry") }
                                 }
                                 RowLayout {
                                     Layout.fillWidth: true
-                                    ActionButton { visible: app.active && !app.external; text: "Pause walk"; onClicked: app.send({op: "control", action: "pause"}) }
-                                    ActionButton { visible: !app.active && !app.external && app.state && ["completed", "aborted"].indexOf(app.state.status) < 0; text: "Resume walk"; primary: true; onClicked: app.send({op: "resume"}) }
+                                    ActionButton { visible: app.active && !app.external; text: "Pause walk"; onClicked: app.control("pause") }
+                                    ActionButton { visible: !app.active && !app.external && app.state && ["completed", "aborted"].indexOf(app.state.status) < 0; text: "Resume walk"; primary: true; onClicked: app.resumeWalk() }
                                     ActionButton { text: app.state && app.state.status === "completed" ? "Open results  ↗" : "Open workspace  ↗"; onClicked: if (app.state) app.openPath(app.state.root) }
                                     Item { Layout.fillWidth: true }
                                     ActionButton { text: app.details ? "Hide details" : "Show details"; onClicked: app.details = !app.details }
@@ -409,6 +454,20 @@ ShellRoot {
             ScrollView {
                 anchors.fill: parent; contentWidth: availableWidth
                 Copy { width: parent.width; text: app.job ? "Constraints\n" + (app.job.constraints || []).join("\n") + "\n\n" + app.job.steps.map(function(s) { return s.title + "\n" + (s.prompt || "Saved step prompt is in the run log.") + "\n\nChecks\n" + JSON.stringify(s.checks || [], null, 2) }).join("\n\n──────────\n\n") : "" }
+            }
+        }
+        Dialog {
+            id: phoneDialog
+            anchors.centerIn: parent; width: Math.min(window.width - 60, 620)
+            modal: true; title: "Your walk, within reach"; standardButtons: Dialog.Close
+            ColumnLayout {
+                width: parent.width; spacing: 12
+                Copy { id: phoneInstructions; Layout.fillWidth: true; font.pixelSize: 13 }
+                Copy { text: "Private phone address"; font.weight: Font.DemiBold }
+                TextField { id: phoneAddress; Layout.fillWidth: true; readOnly: true; selectByMouse: true }
+                Copy { text: "Pairing code"; font.weight: Font.DemiBold }
+                TextField { id: phoneCode; Layout.fillWidth: true; readOnly: true; selectByMouse: true; font.pixelSize: 24; font.family: "monospace" }
+                Copy { Layout.fillWidth: true; text: "Approve, retry, pause, and resume from your phone. Failed checks cannot be approved away. Only your paired Tailscale account can connect."; font.pixelSize: 12; color: "#738073" }
             }
         }
         Dialog {

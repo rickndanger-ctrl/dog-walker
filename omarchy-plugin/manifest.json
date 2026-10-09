@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "rickndanger.dog-walker",
   "name": "Dog Walker",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "author": "rickndanger-ctrl",
   "description": "Quick-launch the offline Dog Walker desktop app",
   "kinds": ["bar-widget"],

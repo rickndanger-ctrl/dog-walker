@@ -1,0 +1,18 @@
+{
+  "devices": [
+    "iPhone 13 (Chromium emulation)",
+    "Pixel 7 (Chromium emulation)"
+  ],
+  "https_verified": true,
+  "pairing_verified": true,
+  "cookie_secure": true,
+  "offline_actions_disabled": true,
+  "api_not_cached": true,
+  "javascript_errors": [],
+  "physical_phone_tested": false,
+  "physical_phone_pairing": {
+    "confirmed_by": "user",
+    "date": "2026-10-08",
+    "scope": "Pairing only; approvals, installation, and browser-specific behavior not confirmed"
+  }
+}

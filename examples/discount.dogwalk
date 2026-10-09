@@ -1,6 +1,7 @@
 dog_walker: 1
 name: Fix a percentage discount
 goal: Correct the discount calculation without changing tests, and verify all three unit tests pass.
+allowed_changes: [calc.py]
 constraints:
   - Only modify calc.py. Never change test_calc.py.
   - Use installed tools only. Do not access the internet or install dependencies.

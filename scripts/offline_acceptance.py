@@ -76,9 +76,9 @@ def run(resume=None, form=False):
                                 evaluation = bridge.store.state.get("evaluation") or {}
                                 if bridge.store.state["step"] == "verify" and evaluation.get("checks") and all(c["pass"] for c in evaluation["checks"]):
                                     scripted_approvals.append({"step": "verify", "reason": "TEST HARNESS explicitly approved the authored final review gate after all checks passed"})
-                                    await bridge.command({"op": "control", "action": "approve"})
+                                    await bridge.command({"op": "control", "action": "approve", "run_id": bridge.store.state["id"], "review_id": bridge.review_id})
                                 else:
-                                    await bridge.command({"op": "control", "action": "pause"})
+                                    await bridge.command({"op": "control", "action": "pause", "run_id": bridge.store.state["id"]})
                                     break
                             await asyncio.sleep(.1)
                     await bridge.task

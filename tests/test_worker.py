@@ -13,6 +13,7 @@ def test_single_fenced_result_keeps_strict_schema():
     body = json.dumps(value)
     assert parse_result(body) == value
     assert parse_result("Here is the result:\n\n```json\n" + body + "\n```\n") == value
+    assert parse_result("Result:\n```json\n" + body + "\n</parameter>\n</function>\n</tool_call>") == value
     with pytest.raises(ValidationError):
         parse_result('```json\n{"status":"completed"}\n```')
 
@@ -24,8 +25,15 @@ def test_single_fenced_result_keeps_strict_schema():
     '```json\n{}\n```\n```json\n{}\n```',
 ])
 def test_ambiguous_or_incomplete_result_is_rejected(text):
-    with pytest.raises(json.JSONDecodeError):
+    with pytest.raises((json.JSONDecodeError, ValidationError)):
         parse_result(text)
+
+
+def test_fenced_result_does_not_accept_truncated_json_or_extra_text():
+    body = json.dumps(output())
+    for text in ("```json\n" + body[:-1], "```json\n" + body + "\nactually failed", "```json\n" + body + "\n" + body):
+        with pytest.raises(json.JSONDecodeError):
+            parse_result(text)
 
 
 def executable(tmp_path, monkeypatch, mode):

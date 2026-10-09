@@ -2,26 +2,56 @@
 import asyncio
 import json
 import subprocess
+import threading
+import time
 from pathlib import Path
 from .workflow import WalkerError, inside
-from .storage import digest, git, scrub
+from .storage import digest, git, scrub, scope_check
 from .judge import LocalJudge, classify
 from .worker import CodexWorker
 
 
-def run_checks(checks, root, result, commands, hashes):
+def run_checks(checks, root, result, commands, hashes, stopped=None):
     rows = []
+    protected_violation = False
+    for check in checks:
+        if check["type"] == "unchanged":
+            try:
+                sha = hashes.get(check["path"])
+                if sha is None or sha != digest(inside(root, check["path"])):
+                    protected_violation = True
+            except (OSError, WalkerError):
+                protected_violation = True
     for i, check in enumerate(checks):
+        if stopped and stopped.is_set():
+            raise WalkerError("Verification cancelled")
         typ = check["type"]
         row = {"id": check.get("id", f"{typ}-{i + 1}"), "type": typ, "pass": False, "detail": ""}
         try:
             if typ == "command":
+                if protected_violation:
+                    row["detail"] = "Verification command skipped because a protected file changed"
+                    rows.append(row)
+                    continue
                 import os, signal
                 from .worker import environment
                 proc = subprocess.Popen(check["argv"], cwd=root, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                         text=True, env=environment(), start_new_session=True)
                 try:
-                    output, _ = proc.communicate(timeout=check.get("timeout", 60))
+                    deadline = time.monotonic() + check.get("timeout", 60)
+                    while True:
+                        if stopped and stopped.is_set():
+                            os.killpg(proc.pid, signal.SIGKILL)
+                            proc.communicate()
+                            raise WalkerError("Verification cancelled")
+                        remaining = deadline - time.monotonic()
+                        if remaining <= 0:
+                            raise subprocess.TimeoutExpired(check["argv"], check.get("timeout", 60))
+                        try:
+                            output, _ = proc.communicate(timeout=min(.1, remaining))
+                            break
+                        except subprocess.TimeoutExpired:
+                            continue
                     row.update({"pass": proc.returncode == 0, "exit_code": proc.returncode, "detail": output[-4000:]})
                 except subprocess.TimeoutExpired:
                     os.killpg(proc.pid, signal.SIGKILL)
@@ -71,11 +101,43 @@ class Engine:
         target = self.workflow.steps[s["step"]]["on_pass"]
         self.store.event("step_finished", step=s["step"], outcome=outcome, next=target)
         self.store.save(step=target, history=history, attempts=0, phase="pending", evaluation=None,
-                        status="running", previous_result=s.get("result"), result=None, failed_checks=[])
+                        status="running", previous_result=s.get("result"), last_evaluation=s.get("evaluation"), result=None, failed_checks=[])
+
+    async def checks(self, spec, result, commands):
+        if "allowed_changes" in self.store.state:
+            scope = await asyncio.to_thread(scope_check, Path(self.store.state["root"]), self.store.state["allowed_changes"], self.store.state["scope_hashes"])
+            if not scope["pass"]:
+                return [scope]
+        stopped = threading.Event()
+        task = asyncio.create_task(asyncio.to_thread(run_checks, spec["checks"], Path(self.store.state["root"]), result, commands, self.store.state["hashes"], stopped))
+        try:
+            checks = await asyncio.shield(task)
+        except asyncio.CancelledError:
+            stopped.set()
+            # Keep the run lock until verification commands really have exited.
+            try:
+                await task
+            except WalkerError:
+                pass
+            raise
+        if "allowed_changes" in self.store.state:
+            checks.append(scope_check(Path(self.store.state["root"]), self.store.state["allowed_changes"], self.store.state["scope_hashes"]))
+        return checks
+
+    async def approve(self, spec, outcome):
+        s = self.store.state
+        checks = await self.checks(spec, s["result"], s.get("commands", []))
+        failed = [c["id"] for c in checks if not c["pass"]]
+        if failed:
+            self.store.save(evaluation={**s["evaluation"], "checks": checks, "decision": "retry", "failed": failed})
+            self.pause("Verification changed while awaiting approval. Retry is required.")
+            return False
+        self.advance(outcome)
+        return True
 
     async def evaluate(self, spec, result, commands):
         self.log("Checking actual project files and test results…")
-        checks = await asyncio.to_thread(run_checks, spec["checks"], Path(self.store.state["root"]), result, commands, self.store.state["hashes"])
+        checks = await self.checks(spec, result, commands)
         for row in checks:
             self.log(f"{'PASS' if row['pass'] else 'FAIL'} {row['id']}: {row['detail']}")
         failures = [c["id"] for c in checks if not c["pass"]]
@@ -84,7 +146,7 @@ class Engine:
         if failures:
             return {"decision": "retry", "failed": failures, "checks": checks, "judge": None}
         if not spec["questions"]:
-            return {"decision": "pass" if checks else "review", "failed": [] if checks else ["Step has no automated acceptance checks"], "checks": checks, "judge": None}
+            return {"decision": "pass" if spec["checks"] else "review", "failed": [] if spec["checks"] else ["Step has no automated acceptance checks"], "checks": checks, "judge": None}
         self.log("Local Laya judge is evaluating this checkpoint…")
         state = {"summary": result["summary"], "evidence": result["evidence"],
                  "verified_checks": [{"id": c["id"], "pass": c["pass"]} for c in checks], "blockers": result["blockers"]}
@@ -95,7 +157,7 @@ class Engine:
         except Exception as exc:
             answer, decision, failed = None, "review", [f"Local judge unavailable: {exc}"]
         # A semantic-only pass remains subject to human review until there is project-specific evidence.
-        if decision == "pass" and not checks:
+        if decision == "pass" and not spec["checks"]:
             decision, failed = "review", ["Semantic-only checkpoint requires human review"]
         return {"decision": decision, "failed": failed, "checks": checks, "judge": answer}
 
@@ -179,7 +241,8 @@ class Engine:
                         continue
                     choice = await self.choose(f"{ident}: checkpoint passed. Approve to move to the next step.", passed=True)
                     if choice == "approve":
-                        self.advance()
+                        if not await self.approve(spec, "passed"):
+                            return
                         continue
                 elif decision == "retry" and s["attempts"] <= spec["max_retries"] and spec.get("retry_prompt"):
                     if s["auto"]:
@@ -204,7 +267,8 @@ class Engine:
                     if any(not c["pass"] for c in evaluation["checks"]):
                         self.pause("A deterministic check failed; Retry or Skip is required")
                         return
-                    self.advance("accepted_manually")
+                    if not await self.approve(spec, "accepted_manually"):
+                        return
                 elif choice == "skip":
                     self.advance("skipped")
                 elif choice == "abort":

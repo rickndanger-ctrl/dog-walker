@@ -9,6 +9,7 @@ import signal
 import shutil
 import sys
 from urllib.parse import unquote, urlparse
+from uuid import uuid4
 from .storage import APP_ROOT, DATA, Store, scrub
 from .forms import compile_form, preview, MAX_BYTES
 from .workflow import WalkerError
@@ -42,6 +43,7 @@ class Desktop:
         self.job = self.workflow = None
         self.task = None
         self.review = None
+        self.review_id = None
         self.review_reason = ""
         self.logs = []
         self.lease = None
@@ -73,6 +75,7 @@ class Desktop:
         busy = bool(self.task and not self.task.done())
         external = not busy and is_busy(self.store)
         self.send("state", state=s, active=busy, external=external,
+                  review_id=self.review_id,
                   needs_review=bool(self.review and not self.review.done()), reason=self.review_reason,
                   total=len(self.store.workflow().steps), job=s.get("job") or {
                       "name": s["name"], "steps": [{"id": ident, "title": ident} for ident in self.store.workflow().steps]})
@@ -92,11 +95,13 @@ class Desktop:
     async def ask(self, reason, passed=False):
         self.review_reason = reason
         self.review = asyncio.get_running_loop().create_future()
+        self.review_id = uuid4().hex
         self.snapshot()
         try:
             return await self.review
         finally:
             self.review = None
+            self.review_id = None
             self.review_reason = ""
 
     def ensure_idle(self):
@@ -148,7 +153,7 @@ class Desktop:
         if op == "hello":
             from .judge import MODEL_DIR
             from .worker import MODEL_PATH, START_COMMAND, CATALOG
-            self.send("hello", version="0.2.0", app_root=str(APP_ROOT),
+            self.send("hello", version="0.3.0", app_root=str(APP_ROOT),
                       health={"codex": bool(shutil.which("codex")), "worker": Path(MODEL_PATH).is_file(),
                               "catalog": Path(CATALOG).is_file(), "launcher": bool(START_COMMAND and Path(START_COMMAND[0]).is_file()),
                               "judge": (MODEL_DIR / "dog-walker-manifest.json").is_file()})
@@ -196,20 +201,28 @@ class Desktop:
             self.ensure_idle()
             if not self.store:
                 raise WalkerError("Choose a saved walk")
+            if cmd.get("run_id") != self.store.state["id"]:
+                raise WalkerError("The selected walk changed. Refresh before resuming.")
             if self.store.state["status"] in {"completed", "aborted"}:
                 raise WalkerError("This walk is already finished")
             self.take_lease()
             self.task = asyncio.create_task(self.walk())
             self.send("selected")
         elif op == "control":
+            if not self.store or cmd.get("run_id") != self.store.state["id"]:
+                raise WalkerError("The selected walk changed. Refresh before controlling it.")
             action = cmd.get("action")
             if action not in {"approve", "retry", "pause", "abort"}:
                 raise WalkerError("Unknown review action")
             if action == "pause":
                 await self.pause()
             elif self.review and not self.review.done():
+                if cmd.get("review_id") != self.review_id:
+                    raise WalkerError("This review request is stale. Refresh before approving or retrying.")
                 if action == "approve" and any(not c["pass"] for c in (self.store.state.get("evaluation") or {}).get("checks", [])):
                     raise WalkerError("A verification check failed. Retry is required; approval cannot bypass it.")
+                self.store.event("review_decision", action=action, review_id=self.review_id,
+                                 step=self.store.state["step"], source=cmd.get("source", "desktop"))
                 self.review.set_result(action)
             else:
                 raise WalkerError("This walk is not waiting for a review")
@@ -219,6 +232,12 @@ class Desktop:
         elif op == "settings":
             from .settings import load_settings
             self.send("settings", settings=load_settings())
+        elif op == "phone":
+            from .phone import info
+            try:
+                self.send("phone_info", **info())
+            except FileNotFoundError:
+                raise WalkerError("The phone companion has not been set up on this computer yet.")
         elif op == "save_settings":
             self.ensure_idle()
             from .settings import save_settings
@@ -233,12 +252,17 @@ class Desktop:
             raise WalkerError("Unknown desktop command")
 
     async def handle(self, cmd):
+        result = {"ok": True}
         try:
             if not isinstance(cmd, dict):
                 raise WalkerError("Commands must be JSON objects")
             await self.command(cmd)
         except (WalkerError, OSError, ValueError, TypeError) as exc:
+            result = {"ok": False, "message": str(exc)}
             self.send("error", message=str(exc))
+        if isinstance(cmd, dict) and isinstance(cmd.get("request_id"), str) and len(cmd["request_id"]) <= 80:
+            self.send("command_result", request_id=cmd["request_id"], **result)
+        return result
 
 
 async def main():

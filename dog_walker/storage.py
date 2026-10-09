@@ -31,7 +31,7 @@ def scrub(value):
 
 def atomic_json(path, value):
     tmp = path.with_suffix(".tmp")
-    with tmp.open("w") as handle:
+    with open(tmp, "w", opener=lambda p, flags: os.open(p, flags, 0o600)) as handle:
         json.dump(scrub(value), handle, indent=2)
         handle.flush()
         os.fsync(handle.fileno())
@@ -55,6 +55,33 @@ def digest(path):
         return None
     with path.open("rb") as handle:
         return hashlib.file_digest(handle, "sha256").hexdigest()
+
+
+def project_inventory(root):
+    """Fingerprint tracked and non-ignored files without following symlinks."""
+    result = subprocess.run(["git", "-C", str(root), "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
+                            capture_output=True, text=True)
+    if result.returncode:
+        raise WalkerError("File allowlists require a Git project, including in current-folder mode")
+    files = {}
+    for name in filter(None, result.stdout.split("\0")):
+        path = Path(root) / name
+        files[name] = "symlink:" + os.readlink(path) if path.is_symlink() else digest(path)
+    return files
+
+
+def scope_check(root, allowed, baseline):
+    from .workflow import inside
+    try:
+        for name in allowed:
+            inside(root, name)
+    except WalkerError as exc:
+        return {"id": "job-scope", "type": "scope", "pass": False, "detail": str(exc)}
+    current = project_inventory(root)
+    changed = sorted(name for name in current.keys() | baseline.keys()
+                     if current.get(name) != baseline.get(name) and name not in allowed)
+    return {"id": "job-scope", "type": "scope", "pass": not changed,
+            "detail": "Changes outside the allowed files: " + ", ".join(changed) if changed else "All tracked and non-ignored file changes stay within the job's allowed files"}
 
 
 class Store:
@@ -92,6 +119,11 @@ class Store:
                      in_place=in_place, step=workflow.entry, phase="pending", status="ready", session=None,
                      auto=auto, attempts=0, turns=0, history=[], result=None, evaluation=None,
                      hashes={f: digest(work / f) for f in files}, created=datetime.now(timezone.utc).isoformat())
+        if "allowed_changes" in workflow.data:
+            from .workflow import inside
+            for name in workflow.data["allowed_changes"]:
+                inside(work, name)
+            state.update(allowed_changes=workflow.data["allowed_changes"], scope_hashes=project_inventory(work))
         atomic_json(path / "state.json", state)
         return cls(path)
 

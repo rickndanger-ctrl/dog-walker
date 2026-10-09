@@ -1,0 +1,68 @@
+{
+  "network_isolated": false,
+  "test_harness_format_recovery": false,
+  "automation": "Temporary QML test IPC invokes actual button handlers",
+  "scripted_approvals": [
+    {
+      "step": "verify",
+      "reason": "TEST HARNESS paired phone HTTP client approved the exact reopened review after verified checks; stale and duplicate decisions were rejected"
+    }
+  ],
+  "turns_before_reopen": 3,
+  "final_checks": [
+    {
+      "id": "tests-unchanged",
+      "type": "unchanged",
+      "pass": true,
+      "detail": "unchanged: passed"
+    },
+    {
+      "id": "final-tests-pass",
+      "type": "command",
+      "pass": true,
+      "detail": "test_full (test_calc.DiscountTests.test_full) ... ok\ntest_percent (test_calc.DiscountTests.test_percent) ... ok\ntest_zero (test_calc.DiscountTests.test_zero) ... ok\n\n----------------------------------------------------------------------\nRan 3 tests in 0.000s\n\nOK\n",
+      "exit_code": 0
+    },
+    {
+      "id": "worker-ran-tests",
+      "type": "command_executed",
+      "pass": true,
+      "detail": "command_executed: passed"
+    },
+    {
+      "id": "job-scope",
+      "type": "scope",
+      "pass": true,
+      "detail": "All tracked and non-ignored file changes stay within the job's allowed files"
+    }
+  ],
+  "phone_http_approval": true,
+  "stale_phone_approval_rejected": true,
+  "duplicate_phone_approval_rejected": true,
+  "status": "completed",
+  "completion": "all_passed",
+  "history": [
+    {
+      "step": "inspect",
+      "outcome": "passed",
+      "attempts": 1,
+      "turn": 1
+    },
+    {
+      "step": "implement",
+      "outcome": "passed",
+      "attempts": 1,
+      "turn": 2
+    },
+    {
+      "step": "verify",
+      "outcome": "passed",
+      "attempts": 1,
+      "turn": 3
+    }
+  ],
+  "turns_after_reopen": 3,
+  "original_unchanged": true,
+  "protected_tests_unchanged": true,
+  "test_output": "test_full (test_calc.DiscountTests.test_full) ... ok\ntest_percent (test_calc.DiscountTests.test_percent) ... ok\ntest_zero (test_calc.DiscountTests.test_zero) ... ok\n\n----------------------------------------------------------------------\nRan 3 tests in 0.000s\n\nOK\n"
+}

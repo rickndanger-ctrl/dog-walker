@@ -35,7 +35,7 @@ def parse_form(text):
         if any(isinstance(token, yaml.tokens.AliasToken) for token in yaml.scan(text)):
             raise WalkerError("YAML aliases are not supported; write each step explicitly")
         data = yaml.load(text, Loader=UniqueLoader)
-    except yaml.YAMLError as exc:
+    except (yaml.YAMLError, RecursionError) as exc:
         raise WalkerError(f"The form is not valid YAML: {exc}") from exc
     schema = json.loads((APP_ROOT / "forms/job.schema.json").read_text())
     errors = sorted(Draft202012Validator(schema).iter_errors(data), key=lambda e: str(e.path))
@@ -47,6 +47,7 @@ def parse_form(text):
     if len(ids) != len(set(ids)):
         raise WalkerError("Step IDs must be unique")
     placeholders = {"SHORT_JOB_NAME", "MEASURABLE_OUTCOME", "LIMIT_CHANGES_TO_THE_REQUESTED_SCOPE",
+                    "EXACT_PROJECT_RELATIVE_FILE_TO_EDIT",
                     "DO_NOT_INSTALL_PACKAGES_OR_USE_THE_INTERNET", "READ_THE_RELEVANT_FILES_AND_REPORT_THE_CURRENT_STATE_WITHOUT_EDITING.",
                     "IDENTIFY_ACTUAL_FILES_AND_THE_TEST_COMMAND", "REINSPECT_AND_CORRECT_THE_REPORTED_ISSUES_WITHOUT_EDITING_THE_PROJECT.",
                     "PRECISE_IMPLEMENTATION_INSTRUCTIONS_WITH_SCOPE_AND_EDGE_CASES.", "DESCRIBE_THE_EXPECTED_BEHAVIOR",
@@ -92,6 +93,8 @@ def compile_form(text):
             (root / step["retry_prompt"]).write_text(correction)
         steps.append(step)
     workflow = {"version": 1, "name": data["name"], "max_turns": data.get("max_turns", 40), "steps": steps}
+    if "allowed_changes" in data:
+        workflow["allowed_changes"] = data["allowed_changes"]
     (root / "workflow.yaml").write_text(yaml.safe_dump(workflow, sort_keys=False))
     (root / "source.dogwalk").write_text(text)
     compiled = load_workflow(root)
@@ -101,6 +104,7 @@ def compile_form(text):
 def preview(data):
     checks = [c for s in data["steps"] for c in s.get("checks", [])]
     return {"name": data["name"], "goal": data["goal"], "constraints": data["constraints"],
+            "allowed_changes": data.get("allowed_changes"),
             "mode": data.get("mode", "auto"), "steps": [
                 {"id": s["id"], "title": s["title"], "criteria": s["success_criteria"],
                  "prompt": s["prompt"], "checks": s.get("checks", []),

@@ -1,13 +1,16 @@
-# 0.2.0 · Native desktop preview
+# 0.3.0 · Desktop and private phone preview
 
-- Native Quickshell/QML desktop with job import, readable plan preview, project chooser, progress, review controls, saved walks, and inbox.
-- Official single-file `.dogwalk` form, agent handoff, JSON Schema, completed example, bounded retries, and literal-dollar prompts.
-- Application-menu launcher, icon, double-click file association, singleton window, and optional Omarchy bar-launcher prototype.
-- Machine-local model settings accepting only loopback HTTP endpoints. The model, launcher, and Codex catalog are configurable rather than tied to one user's absolute paths.
-- MIT-licensed source. No bundled weights, cloud API, or Jev adapter.
-- A single Markdown-fenced worker result is accepted with the same strict JSON Schema and independent checks; ambiguous or incomplete results still pause.
-- Terminal resume mode changes respect run locks.
+Dog Walker now has an optional installable phone companion over private Tailscale HTTPS. Pair from the desktop to monitor progress and evidence, approve or retry a checkpoint, pause, and resume. The computer retains control of the worker and saved-run locks.
 
-This is a source-install preview for the current Quickshell-based Omarchy environment. It is not an official Omarchy package or a universal local-model connector. The first tested worker is Ornith via a patched local llama.cpp Responses API and Codex CLI. Models without a compatible tool-calling/Responses endpoint have not been verified.
+- Exact run/review IDs reject stale and duplicate approvals. Deterministic checks run again before advancement, including when files change during review.
+- Official forms declare an exact file allowlist. Persistent changes outside it block advancement; protected-file failures prevent verification commands from running.
+- Pausing verification terminates its command group and waits before releasing the run lock.
+- A complete worker JSON result may arrive inside a single Markdown/tool envelope. Parsing still enforces the strict result schema and rejects ambiguous, truncated, or unrelated text.
+- Workflow validation rejects unknown fields and invalid transitions; local settings expand home-directory paths. Native completed walks retain their final summary and checks.
+- Phone access requires the configured Tailscale owner plus pairing, signed 12-hour secure cookies, origin and CSRF checks. Offline actions are disabled; evidence and requests are never cached or queued.
 
-Existing engine offline acceptance remains documented in `VERIFICATION.md`. Desktop additions are covered by deterministic bridge tests and an actual offscreen QML import/render smoke test. A fresh real-model job through the desktop has not yet been completed; it is a remaining integration acceptance item, not an automated-test claim. The conservative local semantic judge may require frequent human review.
+**Verification:** 167 automated tests pass. A fresh three-turn Ornith job through the rendered native desktop passed all three project tests, preserved the original checkout and protected tests, reopened without replay, and completed through a scripted paired-phone HTTP approval. Stale and duplicate approvals failed. The real private HTTPS service passed iPhone/Android Chromium emulation checks, and Rick confirmed physical-phone pairing. See [the verification record](https://github.com/rickndanger-ctrl/dog-walker/blob/main/VERIFICATION.md) for evidence and boundaries.
+
+This is an MIT-licensed source-install preview for Quickshell-based Omarchy, with no bundled worker weights or hosted fallback. The tested worker is Ornith through a compatible local Responses API and Codex CLI. Other models, physical-phone approvals/installations, Safari behavior, and long-running production reliability remain unverified. The optional Omarchy bar widget has manifest validation only. The conservative semantic judge may require frequent human review; authored checks remain essential. File allowlists and protected worktrees are not an adversarial-code sandbox.
+
+The earlier engine acceptance used a hard offline namespace. Phone monitoring requires a network connection and was verified separately. Source, setup instructions, official form, schema, agent handoff, and completed example are included.

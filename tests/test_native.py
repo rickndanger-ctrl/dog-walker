@@ -10,7 +10,7 @@ from dog_walker.storage import APP_ROOT
 
 
 @pytest.mark.skipif(not shutil.which("quickshell"), reason="Quickshell is not installed")
-def test_native_import_and_render(tmp_path):
+def test_native_import_and_render(tmp_path, monkeypatch):
     env = {**os.environ, "QT_QPA_PLATFORM": "offscreen", "QT_QPA_PLATFORMTHEME": "",
            "QT_QUICK_CONTROLS_STYLE": "Basic", "QT_QUICK_BACKEND": "software",
            "DOG_WALKER_DATA": str(tmp_path / "data"), "DOG_WALKER_INBOX": str(tmp_path / "inbox"),
@@ -52,6 +52,13 @@ def test_native_import_and_render(tmp_path):
         assert not (tmp_path / "data/runs").exists(), "Import must never start a run"
         ipc("library")
         assert json.loads(ipc("snapshot"))["page"] == "library"
+        from .test_engine import make_run, output
+        store = make_run(tmp_path, monkeypatch, steps=[{"id": f"step{i}", "prompt": "prompt.md"} for i in range(3)])
+        store.save(status="completed", step="complete", turns=3,
+                   history=[{"step": f"step{i}", "outcome": "passed", "attempts": 1, "turn": i + 1} for i in range(3)],
+                   previous_result=output("Completed render fixture"), completion="all_passed")
+        ipc("showWalk", store.state["id"])
+        wait_for(lambda s: s["state"] == store.state["id"] and s["progress"] == 1)
     finally:
         proc.terminate()
         try:

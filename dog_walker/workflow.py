@@ -63,13 +63,25 @@ class Workflow:
 def load_workflow(folder) -> Workflow:
     root = Path(folder).expanduser().resolve()
     try:
-        data = yaml.safe_load((root / "workflow.yaml").read_text())
-    except (OSError, yaml.YAMLError) as exc:
+        source = root / "workflow.yaml"
+        if source.stat().st_size > 512 * 1024:
+            raise WalkerError("Workflow definitions must be smaller than 512 KB")
+        data = yaml.safe_load(source.read_text())
+    except (OSError, yaml.YAMLError, RecursionError) as exc:
         raise WalkerError(f"Cannot read workflow: {exc}") from exc
     if not isinstance(data, dict) or type(data.get("version")) is not int or data.get("version") != 1:
         raise WalkerError("workflow.yaml needs version: 1")
     if not isinstance(data.get("name"), str) or not data["name"].strip():
         raise WalkerError("Workflow needs a name")
+    unknown = set(data) - {"version", "name", "entry", "max_turns", "steps", "allowed_changes"}
+    if unknown:
+        raise WalkerError(f"Unknown workflow fields: {sorted(map(str, unknown))}")
+    if "allowed_changes" in data:
+        allowed = data["allowed_changes"]
+        if not isinstance(allowed, list) or not all(isinstance(name, str) and name for name in allowed):
+            raise WalkerError("allowed_changes must list exact relative file paths")
+        for name in allowed:
+            inside(root, name)
     raw = data.get("steps")
     if not isinstance(raw, list) or not raw:
         raise WalkerError("Workflow needs a non-empty steps list")
@@ -80,6 +92,9 @@ def load_workflow(folder) -> Workflow:
         if not isinstance(item, dict):
             raise WalkerError("Each step must be a mapping")
         s = dict(item)
+        unknown = set(s) - {"id", "prompt", "retry_prompt", "on_pass", "on_exhausted", "max_retries", "timeout", "checks", "questions", "approval"}
+        if unknown:
+            raise WalkerError(f"Unknown step fields: {sorted(map(str, unknown))}")
         ident = s.get("id")
         if not isinstance(ident, str) or not re.fullmatch(r"[a-zA-Z0-9_-]+", ident) or ident in steps or ident in TERMINALS:
             raise WalkerError(f"Invalid or duplicate step ID: {ident}")
@@ -124,7 +139,7 @@ def load_workflow(folder) -> Workflow:
             if not isinstance(q.get("instructions"), str) or not q["instructions"].strip():
                 raise WalkerError(f"{ident}/{qid}: question needs instructions")
             threshold = q.get("threshold", 0.85)
-            if not isinstance(threshold, (int, float)) or not 0.5 <= threshold <= 1:
+            if type(threshold) not in (int, float) or not 0.5 <= threshold <= 1:
                 raise WalkerError(f"{ident}/{qid}: threshold must be 0.5–1")
             if q["type"] == "choice":
                 c = q.get("criteria")
@@ -142,12 +157,12 @@ def load_workflow(folder) -> Workflow:
                 raise WalkerError(f"{ident}/{qid}: expected must be true or false")
         steps[ident] = s
     entry = data.get("entry", raw[0]["id"])
-    if entry not in steps:
+    if not isinstance(entry, str) or entry not in steps:
         raise WalkerError("entry must name a step")
     data["entry"] = entry
     for ident, s in steps.items():
         for key in ("on_pass", "on_exhausted"):
-            if s[key] not in steps and s[key] not in TERMINALS:
+            if not isinstance(s[key], str) or s[key] not in steps and s[key] not in TERMINALS:
                 raise WalkerError(f"{ident}: {key} names missing step {s[key]}")
         if s["on_exhausted"] == "complete":
             raise WalkerError(f"{ident}: failed steps cannot complete a run")

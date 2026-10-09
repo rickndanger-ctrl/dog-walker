@@ -2,7 +2,7 @@
 
 Dog Walker is an offline desktop supervisor for local coding models. Give an agent the official job form, import the completed file, choose a project, and start a walk. Dog Walker sends one authored step at a time, checks actual files and tool results, and advances, corrects, or pauses for your review. **No Jev account, API key, or cloud fallback is used.**
 
-Version 0.2 is an early desktop preview, not a standalone installer with bundled models. The native frontend is **QML + Quickshell**, the same toolkit used by the current Omarchy shell. The workflow engine and local Laya inference stay in Python. Bash launchers and an optional QML bar widget provide desktop integration; Omarchy bindings use Lua. There is no Electron or hosted web frontend.
+Version 0.3 is an early source-install preview, not a standalone installer with bundled models. The native frontend is **QML + Quickshell**, the same toolkit used by the current Omarchy shell. The workflow engine and local Laya inference stay in Python. Bash launchers and an optional QML bar widget provide desktop integration; Omarchy bindings use Lua. The optional phone companion is an installable mobile web app served by your computer over private Tailscale HTTPS. Inference remains local.
 
 ![Dog Walker desktop](docs/desktop.png)
 
@@ -23,6 +23,32 @@ This opens the native desktop app. The installed shortcut on the development Oma
 5. Use **Approve & continue**, **Retry step**, or **Pause walk** when needed. Saved walks can be resumed without silently replaying a completed turn. **Open results** opens the resulting workspace; changes are not silently merged into the original project.
 
 Importing or depositing a job never executes it. A job can contain powerful commands, so only start forms you trust. Protected copy is a convenience for preserving your checkout, not a security boundary.
+
+New official forms declare `allowed_changes`, an exact file allowlist. Dog Walker fingerprints tracked and non-ignored files, independently detects persistent scope drift, and prevents advancement while that gate fails. Ignored files and files outside the workspace are not monitored by this gate. Older forms without an allowlist retain their authored checks but do not have this additional scope protection. Use Git when enabling an allowlist, including in current-folder mode.
+
+Approval applies to the exact run and review request, and deterministic checks run again before advancement. A stale or duplicate decision is rejected. Pausing during verification kills the running command group and waits for its exit before releasing the run lock.
+
+## Phone companion
+
+Once installed, turn on Tailscale on both devices, open **Phone companion** in the desktop, and visit its private HTTPS address on your phone. Enter the pairing code shown on the computer, then use **Add to Home Screen** in Safari or **Install app** in Android's browser. Monitor the current step and evidence, approve or retry a review, pause, and resume. Keep the computer awake and Dog Walker open while a walk runs; closing the desktop pauses its worker.
+
+To install the optional companion on a machine with Tailscale already connected:
+
+```sh
+.venv/bin/python scripts/setup-phone.py
+```
+
+The setup adds a user service on loopback port 18190 and a private Tailscale Serve HTTPS route. It refuses to replace unrelated Serve routes and never enables Funnel. See [Tailscale Serve](https://tailscale.com/docs/features/tailscale-serve) for the private HTTPS mechanism. No project data is hosted by this app in a cloud backend. Phone monitoring itself needs a network connection; the coding engine's hard offline acceptance remains a separate test.
+
+Access requires the configured Tailscale owner identity plus pairing. Signed cookies are Secure, HttpOnly, and SameSite=Strict, expire after 12 hours, and actions require an origin check, CSRF token, exact run ID, and fresh review ID. Only trusted local users should have access to the computer. The app shell can open offline, but status and approval APIs are never cached and offline actions are disabled rather than queued. [PWA installation guidance](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Guides/Making_PWAs_installable).
+
+The companion passes Chromium mobile emulation for iPhone and Android; this is not a claim that physical iOS Safari or every phone/browser has been tested. The prototype controls the current native desktop walk. Terminal-only walks and closing the desktop are not a headless remote-worker service.
+
+![Dog Walker phone companion](docs/phone.png)
+
+Current evidence: **167 automated tests pass**, plus a fresh real-model desktop walk with phone approval and reopen without replay. Physical-phone pairing was confirmed by the user. See [the verification record](VERIFICATION.md) for tested behavior and remaining limits.
+
+To stop phone access, stop `dog-walker-phone.service` and remove only its Serve route with `tailscale serve --https=443 off`. To revoke existing paired sessions, stop that service, delete the private `phone-secret.json` from the app's data directory, and restart it; the new code appears in the desktop panel. Preserve saved runs.
 
 The [official schema](forms/job.schema.json) is versioned, rejects unknown fields, and supports inline prompts, acceptance criteria, authored corrections, file/test checks, and optional local-judge questions. [A completed discount-repair example](examples/discount.dogwalk) targets `examples/fixture`; it is not a plan for arbitrary projects. Plain-text form prompts treat dollar signs literally. Written success criteria are instructions, not automated proof; steps without reliable checks require human review.
 
@@ -144,6 +170,10 @@ unshare -Urn .venv/bin/python scripts/evaluate_judge.py
 unshare -Urn .venv/bin/python scripts/offline_acceptance.py
 # Optional: rendered desktop + real worker, using your running local server
 .venv/bin/python scripts/desktop_acceptance.py
+# Includes a paired HTTP approval through the real QML desktop broker
+.venv/bin/python scripts/desktop_acceptance.py --phone
+# Optional browser checks: install Playwright separately for this harness
+node scripts/phone_acceptance.cjs
 ```
 
 The acceptance script runs Ornith, Codex tools, and Dog Walker inside a network namespace with loopback only, confirms that connecting to an external IP fails, and drives the actual coding fixture. Its report is in `artifacts/offline-acceptance.json`. If the final semantic gate pauses, `scripts/offline_acceptance.py --resume RUN_ID` provides a separately recorded **scripted test approval** after verified checks pass and asserts that no completed worker turn was replayed. This test-only approval is never part of the application.

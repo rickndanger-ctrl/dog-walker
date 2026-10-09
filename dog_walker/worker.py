@@ -47,10 +47,17 @@ def parse_result(text):
     try:
         result = json.loads(text)
     except json.JSONDecodeError:
-        blocks = re.findall(r"(?ms)^```(?:json)?[ \t]*\r?\n(.*?)\r?\n```[ \t]*$", text)
-        if len(blocks) != 1 or text.count("```") != 2:
+        fences = [m for m in re.finditer(r"(?m)^```(?:json)?[ \t]*\r?\n", text)
+                  if text[m.end():].lstrip().startswith("{")]
+        if len(fences) != 1 or text.count("```") > 2:
             raise
-        result = json.loads(blocks[0])
+        body = text[fences[0].end():].lstrip()
+        result, end = json.JSONDecoder().raw_decode(body)
+        # Local tool templates sometimes leave closing tags instead of a fence.
+        # Only a complete JSON value plus known envelope closers is accepted.
+        tail = body[end:].strip()
+        if not re.fullmatch(r"(?:```[ \t]*(?:\r?\n|$))?(?:</(?:parameter|function|tool_call)>[ \t\r\n]*)*", tail):
+            raise json.JSONDecodeError("Unexpected text after fenced JSON", text, fences[0].end() + end)
     validate(result, SCHEMA)
     return result
 

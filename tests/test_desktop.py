@@ -57,7 +57,7 @@ async def test_start_review_approve_completes_and_records_manual_acceptance(app,
     await app.handle({"op": "start", "root": str(project), "in_place": True, "auto": True})
     await wait_review(app)
     assert any(e["type"] == "state" and e["needs_review"] for e in app.events)
-    await app.handle({"op": "control", "action": "approve"})
+    await app.handle({"op": "control", "action": "approve", "run_id": app.store.state["id"], "review_id": app.review_id})
     await app.task
     assert app.store.state["completion"] == "with_manual_acceptance"
     assert app.lease is None
@@ -73,11 +73,11 @@ async def test_pause_resume_does_not_duplicate_completed_worker_turn(app, tmp_pa
     FakeWorker.responses = [output()]
     await app.handle({"op": "start", "root": str(project), "in_place": True})
     await wait_review(app)
-    await app.handle({"op": "control", "action": "pause"})
+    await app.handle({"op": "control", "action": "pause", "run_id": app.store.state["id"]})
     assert app.store.state["status"] == "paused"
-    await app.handle({"op": "resume"})
+    await app.handle({"op": "resume", "run_id": app.store.state["id"]})
     await wait_review(app)
-    await app.handle({"op": "control", "action": "approve"})
+    await app.handle({"op": "control", "action": "approve", "run_id": app.store.state["id"], "review_id": app.review_id})
     await app.task
     assert app.store.state["turns"] == 1
     assert len(FakeWorker.prompts) == 1
@@ -93,7 +93,7 @@ async def test_locked_run_is_observation_only(app, tmp_path):
     try:
         await app.handle({"op": "load", "id": other.state["id"]})
         assert any(e.get("external") for e in app.events if e["type"] == "state")
-        await app.handle({"op": "resume"})
+        await app.handle({"op": "resume", "run_id": app.store.state["id"]})
         assert app.events[-1]["type"] == "error"
         assert (other.path / "state.json").read_text() == before
         assert app.lease is None
@@ -110,7 +110,7 @@ async def test_failed_check_cannot_be_approved(app, tmp_path):
     FakeWorker.responses = [output()]
     await app.handle({"op": "start", "root": str(project), "in_place": True})
     await wait_review(app)
-    await app.handle({"op": "control", "action": "approve"})
+    await app.handle({"op": "control", "action": "approve", "run_id": app.store.state["id"], "review_id": app.review_id})
     assert app.events[-1]["type"] == "error"
     assert app.store.state["history"] == []
     await app.pause()

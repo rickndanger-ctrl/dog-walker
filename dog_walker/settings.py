@@ -19,7 +19,9 @@ def defaults():
 def validate_settings(value):
     if not isinstance(value, dict) or set(value) != set(defaults()):
         raise WalkerError("Worker settings require model_path, endpoint, catalog, and start_command")
-    parsed = urlparse(value.get("endpoint", ""))
+    if not isinstance(value["endpoint"], str):
+        raise WalkerError("Worker endpoint must be a local HTTP /v1 address")
+    parsed = urlparse(value["endpoint"])
     if parsed.scheme != "http" or parsed.hostname not in {"127.0.0.1", "localhost", "::1"} or parsed.username or parsed.password or parsed.query or parsed.fragment or parsed.path.rstrip("/") != "/v1":
         raise WalkerError("Worker endpoint must be a local HTTP /v1 address; cloud endpoints are not allowed")
     for key in ("model_path", "catalog"):
@@ -30,7 +32,10 @@ def validate_settings(value):
         raise WalkerError("start_command must be an argument list, or [] to use an already-running server")
     if command and not Path(command[0]).expanduser().is_absolute():
         raise WalkerError("The model launcher must be an absolute local path")
-    return value
+    normalized = {**value, "model_path": str(Path(value["model_path"]).expanduser()),
+                  "catalog": str(Path(value["catalog"]).expanduser())}
+    normalized["start_command"] = [str(Path(command[0]).expanduser()), *command[1:]] if command else []
+    return normalized
 
 
 def load_settings():
@@ -45,7 +50,7 @@ def load_settings():
 
 
 def save_settings(value):
-    validate_settings(value)
+    value = validate_settings(value)
     CONFIG.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     temporary = CONFIG.with_suffix(".tmp")
     temporary.write_text(json.dumps(value, indent=2) + "\n")

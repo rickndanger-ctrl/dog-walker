@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "rick-dog-walker"
-version = "0.2.0"
+version = "0.3.0"
 description = "Offline prompt-sequence supervisor for local coding models"
 requires-python = ">=3.14"
 dependencies = ["textual>=6,<9", "PyYAML>=6,<7", "jsonschema>=4,<5", "laya==0.4.1"]
