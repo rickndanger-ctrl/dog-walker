@@ -1,0 +1,77 @@
+{
+  "external_routes": [],
+  "outbound_connect_blocked": true,
+  "status": "paused",
+  "completion": null,
+  "history": [
+    {
+      "step": "inspect",
+      "outcome": "passed",
+      "attempts": 1,
+      "turn": 1
+    },
+    {
+      "step": "plan",
+      "outcome": "passed",
+      "attempts": 1,
+      "turn": 2
+    },
+    {
+      "step": "implement",
+      "outcome": "passed",
+      "attempts": 1,
+      "turn": 3
+    },
+    {
+      "step": "test",
+      "outcome": "passed",
+      "attempts": 1,
+      "turn": 4
+    }
+  ],
+  "reason": "Paused by user or headless review gate",
+  "judge": {
+    "decision": "review",
+    "failed": [
+      "work_done"
+    ],
+    "checks": [
+      {
+        "id": "tests-unchanged",
+        "type": "unchanged",
+        "pass": true,
+        "detail": "unchanged: passed"
+      },
+      {
+        "id": "explains-fix",
+        "type": "response_contains",
+        "pass": true,
+        "detail": "response_contains: passed"
+      }
+    ],
+    "judge": {
+      "model": "convaiinnovations/laya-typed-decisions",
+      "answers": {
+        "work_done": {
+          "type": "noul",
+          "noul": 0.6722,
+          "confidence": 0.6722,
+          "answer_confidence": 0.6722,
+          "action": {
+            "act_probability": 1.0
+          }
+        }
+      },
+      "usage": {
+        "input_tokens": 318,
+        "output_tokens": 0,
+        "state_tokens": 281,
+        "state_tokens_dropped": 0,
+        "truncated": false,
+        "truncated_questions": []
+      },
+      "revision": "e929ae5cf69bc34259cd2f95c9e91145b818b1f0"
+    }
+  },
+  "exit_code": 2
+}

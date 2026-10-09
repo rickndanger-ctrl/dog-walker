@@ -1,0 +1,1 @@
+Step ${step_id}. Inspect calc.py and test_calc.py in ${project_root}. Use the shell tool to read both files. Identify the discount bug and what the tests expect. Do not edit any file yet. Name both files in your summary or evidence.

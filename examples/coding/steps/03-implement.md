@@ -1,0 +1,1 @@
+Apply the percentage-discount fix to calc.py. Change only calc.py and leave test_calc.py unchanged. The correct result is price * (1 - percent / 100). Report the actual edit in evidence. Do not commit or fetch anything.

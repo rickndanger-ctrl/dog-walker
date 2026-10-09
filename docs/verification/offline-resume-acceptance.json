@@ -1,0 +1,47 @@
+{
+  "external_routes": [],
+  "outbound_connect_blocked": true,
+  "status": "completed",
+  "completion": "with_manual_acceptance",
+  "history": [
+    {
+      "step": "inspect",
+      "outcome": "passed",
+      "attempts": 1,
+      "turn": 1
+    },
+    {
+      "step": "plan",
+      "outcome": "passed",
+      "attempts": 1,
+      "turn": 2
+    },
+    {
+      "step": "implement",
+      "outcome": "passed",
+      "attempts": 1,
+      "turn": 3
+    },
+    {
+      "step": "test",
+      "outcome": "passed",
+      "attempts": 1,
+      "turn": 4
+    },
+    {
+      "step": "summary",
+      "outcome": "accepted_manually",
+      "attempts": 1,
+      "turn": 5
+    }
+  ],
+  "reason": "Paused by user or headless review gate",
+  "judge": null,
+  "exit_code": 0,
+  "scripted_approvals": [
+    {
+      "step": "summary",
+      "reason": "summary: review needed \u2014 ['work_done']."
+    }
+  ]
+}

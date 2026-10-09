@@ -1,0 +1,37 @@
+dog_walker: 1
+name: Fix a percentage discount
+goal: Correct the discount calculation without changing tests, and verify all three unit tests pass.
+constraints:
+  - Only modify calc.py. Never change test_calc.py.
+  - Use installed tools only. Do not access the internet or install dependencies.
+mode: auto
+max_turns: 15
+steps:
+  - id: inspect
+    title: Understand the current behavior
+    prompt: Read calc.py and test_calc.py. Explain the discount bug. Do not edit anything yet.
+    success_criteria: [Identify the percentage calculation bug using the actual source and tests.]
+    checks:
+      - {type: no_changes, id: project-untouched}
+      - {type: response_contains, text: calc.py, id: read-source}
+      - {type: response_contains, text: test_calc.py, id: read-tests}
+    retry_prompt: Reinspect the source and tests and correct your explanation without editing any files.
+    max_retries: 2
+  - id: implement
+    title: Repair the discount calculation
+    prompt: Fix the percentage discount formula in calc.py. Preserve existing function signatures. Do not edit tests. Run python3 -m unittest -v.
+    success_criteria: [The discount function handles percentage discounts correctly., All three existing unit tests pass unchanged.]
+    checks:
+      - {type: unchanged, path: test_calc.py, id: tests-unchanged}
+      - {type: command, argv: [python3, -m, unittest, -v], timeout: 30, id: actual-tests-pass}
+    retry_prompt: Correct the implementation based on the failed checks. Do not edit the tests or widen the task.
+    max_retries: 2
+  - id: verify
+    title: Verify and report the results
+    prompt: Run python3 -m unittest -v again. Summarize the discount fix, the files changed, and actual test results. Do not modify any more files.
+    success_criteria: [Tests pass independently., The summary accurately describes the discount fix and test evidence.]
+    checks:
+      - {type: unchanged, path: test_calc.py, id: tests-unchanged}
+      - {type: command, argv: [python3, -m, unittest, -v], timeout: 30, id: final-tests-pass}
+      - {type: command_executed, text: unittest, id: worker-ran-tests}
+    approval: true

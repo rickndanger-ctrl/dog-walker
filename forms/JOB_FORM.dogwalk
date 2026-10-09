@@ -1,0 +1,40 @@
+# Hand this form and AGENT_HANDOFF.md to your agent. Replace all placeholders.
+dog_walker: 1
+name: SHORT_JOB_NAME
+goal: MEASURABLE_OUTCOME
+constraints:
+  - LIMIT_CHANGES_TO_THE_REQUESTED_SCOPE
+  - DO_NOT_INSTALL_PACKAGES_OR_USE_THE_INTERNET
+mode: auto
+max_turns: 15
+steps:
+  - id: inspect
+    title: Inspect the project
+    prompt: |
+      READ_THE_RELEVANT_FILES_AND_REPORT_THE_CURRENT_STATE_WITHOUT_EDITING.
+    success_criteria:
+      - IDENTIFY_ACTUAL_FILES_AND_THE_TEST_COMMAND
+    checks:
+      - {id: project-untouched, type: no_changes}
+    retry_prompt: |
+      REINSPECT_AND_CORRECT_THE_REPORTED_ISSUES_WITHOUT_EDITING_THE_PROJECT.
+    max_retries: 2
+  - id: implement
+    title: Make the requested change
+    prompt: |
+      PRECISE_IMPLEMENTATION_INSTRUCTIONS_WITH_SCOPE_AND_EDGE_CASES.
+    success_criteria:
+      - DESCRIBE_THE_EXPECTED_BEHAVIOR
+    checks: []
+    approval: true
+    retry_prompt: |
+      CORRECT_THE_FAILED_CRITERIA_WITHOUT_WIDENING_SCOPE_OR_WEAKENING_TESTS.
+    max_retries: 2
+  - id: verify
+    title: Verify and summarize
+    prompt: |
+      RUN_THE_REAL_TESTS_AND_REPORT_CHANGES_RESULTS_AND_REMAINING_LIMITATIONS.
+    success_criteria:
+      - ALL_RELEVANT_TESTS_PASS_AND_THE_SUMMARY_MATCHES_ACTUAL_EVIDENCE
+    checks: []
+    approval: true

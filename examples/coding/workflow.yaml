@@ -1,0 +1,53 @@
+version: 1
+name: Fix a percentage discount
+entry: inspect
+max_turns: 15
+steps:
+  - id: inspect
+    prompt: steps/01-inspect.md
+    retry_prompt: retries/correct.md
+    checks:
+      - {id: untouched-project, type: no_changes}
+      - {id: inspected-source, type: response_contains, text: calc.py}
+      - {id: inspected-tests, type: response_contains, text: test_calc.py}
+  - id: plan
+    prompt: steps/02-plan.md
+    retry_prompt: retries/correct.md
+    checks:
+      - {id: untouched-project, type: no_changes}
+      - {id: percentage-formula, type: response_contains, text: "100"}
+  - id: implement
+    prompt: steps/03-implement.md
+    retry_prompt: retries/correct.md
+    checks:
+      - {id: tests-unchanged, type: unchanged, path: test_calc.py}
+      - id: actual-tests-pass
+        type: command
+        argv: [python3, -m, unittest, -v]
+        timeout: 30
+  - id: test
+    prompt: steps/04-test.md
+    retry_prompt: retries/correct.md
+    checks:
+      - {id: tests-unchanged, type: unchanged, path: test_calc.py}
+      - {id: worker-ran-tests, type: command_executed, text: unittest}
+      - id: independently-rerun-tests
+        type: command
+        argv: [python3, -m, unittest, -v]
+        timeout: 30
+  - id: summary
+    prompt: steps/05-summary.md
+    retry_prompt: retries/correct.md
+    checks:
+      - {id: tests-unchanged, type: unchanged, path: test_calc.py}
+      - {id: explains-fix, type: response_contains, text: discount}
+      - id: final-tests-still-pass
+        type: command
+        argv: [python3, -m, unittest, -v]
+        timeout: 30
+    questions:
+      work_done:
+        type: noul
+        instructions: Does this agent trace report successful completion of the work?
+        expected: true
+        threshold: 0.85

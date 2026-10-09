@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rick-dog-walker"
+version = "0.2.0"
+description = "Offline prompt-sequence supervisor for local coding models"
+requires-python = ">=3.14"
+dependencies = ["textual>=6,<9", "PyYAML>=6,<7", "jsonschema>=4,<5", "laya==0.4.1"]
+
+[project.scripts]
+dog-walker = "dog_walker.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["dog_walker*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
