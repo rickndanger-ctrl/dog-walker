@@ -22,6 +22,8 @@ This opens the native desktop app. The installed shortcut on the development Oma
 4. Press **Start walk**. Auto walk advances checked steps and uses bounded corrections. It still stops for explicit approvals, uncertainty, blockers, and exhausted retries.
 5. Use **Approve & continue**, **Retry step**, or **Pause walk** when needed. Saved walks can be resumed without silently replaying a completed turn. **Open results** opens the resulting workspace; changes are not silently merged into the original project.
 
+The desktop's **How to use Dog Walker** button provides the complete walkthrough. The phone page has the same named guide above the dashboard. For a practice walk with approvals before edits and after testing, use [the phone-flow test form](examples/phone-flow-test.dogwalk) with a clean, committed copy of `examples/fixture`.
+
 Importing or depositing a job never executes it. A job can contain powerful commands, so only start forms you trust. Protected copy is a convenience for preserving your checkout, not a security boundary.
 
 New official forms declare `allowed_changes`, an exact file allowlist. Dog Walker fingerprints tracked and non-ignored files, independently detects persistent scope drift, and prevents advancement while that gate fails. Ignored files and files outside the workspace are not monitored by this gate. Older forms without an allowlist retain their authored checks but do not have this additional scope protection. Use Git when enabling an allowlist, including in current-folder mode.

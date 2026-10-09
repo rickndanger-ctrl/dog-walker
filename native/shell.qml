@@ -138,6 +138,7 @@ ShellRoot {
         }
         function companionReply(id: string): string { return JSON.stringify(app.companionReplies[id] || null) }
         function showPhone(): string { window.visible = true; app.send({op: "phone"}); return "requested" }
+        function showHelp(): string { window.visible = true; helpDialog.open(); return "ok" }
     }
     FileDialog {
         id: fileDialog
@@ -188,6 +189,7 @@ ShellRoot {
                     ActionButton { visible: !!app.state; Layout.fillWidth: true; text: "Current walk"; dark: true; onClicked: app.page = "walk" }
                     Item { Layout.fillHeight: true }
                     Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: "#355649" }
+                    ActionButton { Layout.fillWidth: true; text: "How to use Dog Walker"; dark: true; onClicked: helpDialog.open() }
                     ActionButton { Layout.fillWidth: true; text: "Local model settings"; dark: true; onClicked: app.send({op: "settings"}) }
                     ActionButton { Layout.fillWidth: true; text: "Phone companion"; dark: true; onClicked: app.send({op: "phone"}) }
                     Copy { text: "●  No cloud connection"; font.pixelSize: 11; color: "#acd0b0" }
@@ -229,6 +231,7 @@ ShellRoot {
                         spacing: 20
                         Copy { Layout.fillWidth: true; text: app.job ? "Ready to walk." : "Big plans. Small steps."; font.pixelSize: 36; font.weight: Font.DemiBold; font.letterSpacing: -1 }
                         Copy { Layout.fillWidth: true; text: app.job ? "Review your job, choose a project, and let your local model get to work." : "Give your agent a plan. Dog Walker takes it one step at a time,\nchecks the work, and asks you when it needs a hand."; color: "#738073"; lineHeight: 1.4; font.pixelSize: 15 }
+                        ActionButton { visible: !app.job; text: "First walk? Start here  →"; onClicked: helpDialog.open() }
                         Paper {
                             visible: !app.job
                             Layout.fillWidth: true; implicitHeight: 260
@@ -326,7 +329,7 @@ ShellRoot {
                                 }
                                 RowLayout {
                                     Layout.fillWidth: true
-                                    Copy { Layout.fillWidth: true; text: "Nothing runs until you press Start."; color: "#849080"; font.pixelSize: 11 }
+                                    Copy { Layout.fillWidth: true; text: "Nothing runs until you press Start. The first model step can take a few minutes."; color: "#849080"; font.pixelSize: 11 }
                                     ActionButton { text: "Start walk  →"; primary: true; enabled: app.online && !!app.project && !app.active; onClicked: { app.error = ""; app.logs = ""; app.send({op: "start", root: app.project, auto: app.automatic, in_place: app.inPlace}) } }
                                 }
                             }
@@ -437,6 +440,39 @@ ShellRoot {
                 Copy { Layout.fillWidth: true; text: "LOCAL MODELS  ·  AUTHORED STEPS  ·  VERIFIED CHECKPOINTS"; font.pixelSize: 9; font.letterSpacing: 1.2; color: "#9aa18e" }
             }
         }
+        }
+        Dialog {
+            id: helpDialog
+            anchors.centerIn: parent
+            width: Math.min(window.width - 60, 720); height: Math.min(window.height - 60, 650)
+            modal: true; title: "Your first walk, step by step"; standardButtons: Dialog.Close
+            ScrollView {
+                anchors.fill: parent; contentWidth: availableWidth; clip: true
+                ColumnLayout {
+                    width: parent.width; spacing: 20
+                    Copy { Layout.fillWidth: true; text: "You choose the job. Dog Walker checks each step and asks for your decision when needed."; font.pixelSize: 15 }
+                    Repeater {
+                        model: [
+                            {title: "1. Get a completed job form", body: "Click Agent form on New walk. Give your agent JOB_FORM.dogwalk, AGENT_HANDOFF.md, and your task. Ask it to return one completed .dogwalk file. The blank template cannot run. A prepared test form is ready to import directly."},
+                            {title: "2. Import and review", body: "Choose a file, drop it on New walk, or select it from Inbox. Read the goal, allowed files, steps, review checkpoints, and commands. Use Read full plan for details. Importing a form does not start work."},
+                            {title: "3. Choose the matching project", body: "Click Choose folder and select the folder containing the files named in the form. Leave Protected copy selected to work in a separate Git workspace; the project must be clean and committed. Current folder edits the selected project directly."},
+                            {title: "4. Start and watch", body: "Keep Auto walk on to advance checked steps, then press Start walk once. The first local-model step can take a few minutes. Progress and Show details explain what is happening. Keep the computer awake and this app open. Pause walk stops work and retains partial edits."},
+                            {title: "5. Review on desktop or phone", body: "When Needs your review appears, read the summary and checks. Approve & continue accepts this checkpoint; checks run again before advancing. Retry step requests the authored correction. Failed checks require a correction and cannot be approved away. For your phone, enable Tailscale on both devices, open Phone companion here, visit its address, and pair. Your phone shows this same walk and review."},
+                            {title: "6. Check the result or resume later", body: "Walk complete shows the outcome and final checks. Open results opens the workspace containing the edits. In Protected copy mode, review and copy or merge wanted changes yourself; the original project is not silently replaced. To continue a paused walk, use Saved walks → Open → Resume walk. An interrupted step needs an explicit retry."}
+                        ]
+                        ColumnLayout {
+                            required property var modelData
+                            Layout.fillWidth: true; spacing: 8
+                            Copy { Layout.fillWidth: true; text: modelData.title; font.pixelSize: 17; font.weight: Font.DemiBold }
+                            Copy { Layout.fillWidth: true; text: modelData.body; color: "#65776b"; lineHeight: 1.25 }
+                        }
+                    }
+                    RowLayout {
+                        ActionButton { text: "Open agent form  ↗"; onClicked: app.openPath(app.appRoot + "/forms") }
+                        ActionButton { text: "Open inbox  ↗"; onClicked: app.openPath(app.inboxPath) }
+                    }
+                }
+            }
         }
         Dialog {
             id: pasteDialog
