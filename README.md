@@ -16,17 +16,17 @@ dog-walker
 
 This opens the native desktop app. The installed shortcut on the development Omarchy machine is **Super + Alt + D**; the portable installer does not override other people's keybindings.
 
-1. Click **Agent form**. Give your agent [the handoff instructions](forms/AGENT_HANDOFF.md), [the blank form](forms/JOB_FORM.dogwalk), and your task. The agent returns one completed `.dogwalk` file.
+1. Click **Agent form**. Give your agent [the handoff instructions](forms/AGENT_HANDOFF.md), [the blank form](forms/JOB_FORM.dogwalk), and your task. The agent returns one completed `.dogwalk` file, or saves it directly in `~/Documents/Dog Walker/Inbox` when you ask.
 2. Drop it onto the window, choose the file, paste its YAML, or double-click it in your file manager. Files in `~/Documents/Dog Walker/Inbox` appear in the app's inbox automatically.
-3. Review the plan and verification commands, then choose the project folder. **Protected copy** requires a clean, committed Git repository. **Current folder** explicitly edits the selected files instead.
+3. Review the plan and verification commands, then choose the project folder. **Protected copy** accepts an ordinary folder and copies its current files into a separate workspace. Dog Walker prepares local Git history there automatically. **Current folder** edits the selected files and adds local history if needed.
 4. Press **Start walk**. Auto walk advances checked steps and uses bounded corrections. It still stops for explicit approvals, uncertainty, blockers, and exhausted retries.
 5. Use **Approve & continue**, **Retry step**, or **Pause walk** when needed. Saved walks can be resumed without silently replaying a completed turn. **Open results** opens the resulting workspace; changes are not silently merged into the original project.
 
-The desktop's **How to use Dog Walker** button provides the complete walkthrough. The phone page has the same named guide above the dashboard. For a practice walk with approvals before edits and after testing, use [the phone-flow test form](examples/phone-flow-test.dogwalk) with a clean, committed copy of `examples/fixture`.
+The desktop's **How to use Dog Walker** button provides the complete walkthrough. The phone page has the same named guide above the dashboard. For a practice walk with approvals before edits and after testing, use [the phone-flow test form](examples/phone-flow-test.dogwalk) with a copy of `examples/fixture`; you do not need to initialize Git.
 
-Importing or depositing a job never executes it. A job can contain powerful commands, so only start forms you trust. Protected copy is a convenience for preserving your checkout, not a security boundary.
+Importing or depositing a job never executes it. A job can contain powerful commands, so only start forms you trust. Protected copy preserves the selected folder, including its existing Git history, by working in an independent copy. It is not a security boundary.
 
-New official forms declare `allowed_changes`, an exact file allowlist. Dog Walker fingerprints tracked and non-ignored files, independently detects persistent scope drift, and prevents advancement while that gate fails. Ignored files and files outside the workspace are not monitored by this gate. Older forms without an allowlist retain their authored checks but do not have this additional scope protection. Use Git when enabling an allowlist, including in current-folder mode.
+New official forms declare `allowed_changes`, an exact file allowlist. Dog Walker fingerprints tracked and non-ignored files, independently detects persistent scope drift, and prevents advancement while that gate fails. Ignored files and files outside the workspace are not monitored by this gate. Older forms without an allowlist retain their authored checks but do not have this additional scope protection. Dog Walker prepares the local Git baseline automatically, including when an ordinary folder uses an allowlist.
 
 Approval applies to the exact run and review request, and deterministic checks run again before advancement. A stale or duplicate decision is rejected. Pausing during verification kills the running command group and waits for its exit before releasing the run lock.
 
@@ -48,7 +48,7 @@ The companion passes Chromium mobile emulation for iPhone and Android; this is n
 
 ![Dog Walker phone companion](docs/phone.png)
 
-Current evidence: **167 automated tests pass**, plus a fresh real-model desktop walk with phone approval and reopen without replay. Physical-phone pairing was confirmed by the user. See [the verification record](VERIFICATION.md) for tested behavior and remaining limits.
+Current evidence: **178 automated tests pass**, plus a fresh real-model desktop walk with phone approval and reopen without replay. Physical-phone pairing was confirmed by the user. See [the verification record](VERIFICATION.md) for tested behavior and remaining limits.
 
 To stop phone access, stop `dog-walker-phone.service` and remove only its Serve route with `tailscale serve --https=443 off`. To revoke existing paired sessions, stop that service, delete the private `phone-secret.json` from the app's data directory, and restart it; the new code appears in the desktop panel. Preserve saved runs.
 
@@ -73,7 +73,7 @@ dog-walker validate-form examples/discount.dogwalk
 dog-walker desktop /path/to/completed-job.dogwalk
 ```
 
-Normally Dog Walker makes a detached Git worktree and leaves your original checkout intact. The source repository must have a commit and no uncommitted files. Use `--in-place` explicitly to work on your current files instead. A run does not commit, merge, deploy, or publish the result. Review and copy or merge the edits yourself. Run history shows the workspace path.
+Normally Dog Walker copies the current project files into a private workspace and creates a local starting commit. Existing Git metadata, hooks, and remotes are excluded from that copy. Ordinary folders, empty projects, and projects with uncommitted work are supported; the original folder stays unchanged. Use `--in-place` explicitly to edit selected files directly; missing local Git history is prepared automatically. The app never creates a GitHub repository, adds a remote, or pushes a project. Worker and verification commands run with network access disabled. The initial local commit is a baseline, not publication of the finished work. Review and copy or merge wanted edits yourself.
 
 ## Write your prompt sequence
 
@@ -138,7 +138,7 @@ Every turn returns a validated `StepResult`: `status`, `summary`, `evidence`, `f
 
 ## Offline operation and recovery
 
-After setup, the workflow runner, local judge, and model inference require no internet connection. Model requests go to the configured loopback endpoint (the initial profile uses `127.0.0.1:18081`). The judge loads verified local files with Hugging Face and Transformers offline modes enabled. Codex uses its own local provider configuration with cloud apps, web tools, hooks, telemetry, and plugins disabled. Coding tools run with the existing workspace sandbox. The application does not change system-wide network settings; arbitrary job commands are not automatically network-isolated. See [offline/security boundaries](SECURITY.md).
+After setup, the workflow runner, local judge, and model inference require no internet connection. Model requests go to the configured loopback endpoint (the initial profile uses `127.0.0.1:18081`). The judge loads verified local files with Hugging Face and Transformers offline modes enabled. Codex uses its own local provider configuration with cloud apps, web tools, hooks, telemetry, and plugins disabled. Worker tools use the workspace sandbox with network access explicitly disabled. Authored verification commands also use the installed Codex workspace sandbox; they fail closed if it is unavailable. Model requests remain loopback, and phone monitoring uses a separate private service. The app does not change system-wide network settings. See [offline/security boundaries](SECURITY.md).
 
 There is an important measured limitation: on the initial 32-case authored synthetic diagnostic, the completion question returned **28 reviews, 4 negative decisions, and no automatic positive decisions** at the conservative 0.85 threshold. There were zero false passes in that small set, but that does not establish general accuracy. Laya is currently helpful as a review gate, not a sole autonomous judge for coding. Workflow-specific tests and file checks provide the strongest automatic checkpoints. We have not tuned thresholds merely to make the demo pass.
 
@@ -146,7 +146,7 @@ There is an important measured limitation: on the initial 32-case authored synth
 
 When reopening a reviewed step, Dog Walker reruns its checks without resending the completed prompt. An interrupted turn instead needs an explicit retry, because its commands might already have modified files. One lock prevents two walkers from running the same saved run concurrently.
 
-Run data lives at `~/.local/share/dog-walker/runs/RUN_ID/`. Each run holds the copied workflow, event log, snapshots, result files, and worktree. Logs are private local files and redact common credential patterns; they may still contain your project text. The isolated Codex state is in `~/.local/share/dog-walker/codex-home/` and the pinned judge is under `~/.local/share/dog-walker/judge/`. Nothing is written to Obsidian automatically by the app.
+Run data lives at `~/.local/share/dog-walker/runs/RUN_ID/`. Each run holds the copied workflow, event log, snapshots, result files, and workspace. Logs are private local files and redact common credential patterns; they may still contain your project text. The isolated Codex state is in `~/.local/share/dog-walker/codex-home/` and the pinned judge is under `~/.local/share/dog-walker/judge/`. Nothing is written to Obsidian automatically by the app.
 
 ## Installation and verification
 
@@ -173,7 +173,7 @@ unshare -Urn .venv/bin/python scripts/offline_acceptance.py
 # Optional: rendered desktop + real worker, using your running local server
 .venv/bin/python scripts/desktop_acceptance.py
 # Includes a paired HTTP approval through the real QML desktop broker
-.venv/bin/python scripts/desktop_acceptance.py --phone
+.venv/bin/python scripts/desktop_acceptance.py --phone --plain-project
 # Optional browser checks: install Playwright separately for this harness
 node scripts/phone_acceptance.cjs
 ```
@@ -182,4 +182,4 @@ The acceptance script runs Ornith, Codex tools, and Dog Walker inside a network 
 
 The separate desktop acceptance harness renders a temporary copy of the actual QML interface, imports the official completed example, invokes its Start/Pause/Resume/Approve button handlers, and checks a real Ornith job plus reopen without replay. It uses isolated disposable run data and an already-running loopback server. Its final approval is explicitly scripted for testing; this harness does not disable the host's external network. Private artifacts and model weights are excluded from Git. Selected verification summaries are in [docs/verification](docs/verification/).
 
-To remove the application later, remove its launcher and project environment. Preserve the data folder if you want saved runs. Git worktrees should be removed using Git from their source repositories after saving wanted edits.
+To remove the application later, remove its launcher and project environment. Preserve the data folder if you want saved runs. New protected workspaces are independent local copies and can be removed after saving wanted edits. Older saved runs may use Git worktrees; remove those using Git from their source repositories.

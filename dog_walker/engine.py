@@ -35,7 +35,12 @@ def run_checks(checks, root, result, commands, hashes, stopped=None):
                     continue
                 import os, signal
                 from .worker import environment
-                proc = subprocess.Popen(check["argv"], cwd=root, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                import shutil
+                codex = shutil.which("codex")
+                if not codex:
+                    raise WalkerError("Codex is required to run verification commands in the local-only sandbox")
+                argv = [codex, "sandbox", "-P", ":workspace", "-C", str(root), "--", *check["argv"]]
+                proc = subprocess.Popen(argv, cwd=root, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                         text=True, env=environment(), start_new_session=True)
                 try:
                     deadline = time.monotonic() + check.get("timeout", 60)
@@ -190,7 +195,7 @@ class Engine:
             elif s["phase"] == "reviewing":
                 # Project files may have changed while the run was paused. Recheck without replaying the worker.
                 self.store.save(phase="evaluating")
-            self.store.save(status="running")
+            self.store.save(status="running", reason=None)
             await self.worker.ready()
             while not self.cancelled:
                 ident = s["step"]

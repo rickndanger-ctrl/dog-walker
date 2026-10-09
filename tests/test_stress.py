@@ -31,8 +31,8 @@ async def test_approval_rechecks_changes_made_during_live_review(tmp_path, monke
 
 
 async def test_cancelling_verification_kills_command_before_unlock(tmp_path, monkeypatch):
-    started = tmp_path / "started"
-    escaped = tmp_path / "should-never-be-written"
+    started = tmp_path / "project/started"
+    escaped = tmp_path / "project/should-never-be-written"
     code = f"from pathlib import Path; import time; Path({str(started)!r}).touch(); time.sleep(1); Path({str(escaped)!r}).touch()"
     store = make_run(tmp_path, monkeypatch, steps=[{"id": "one", "prompt": "prompt.md", "checks": [{"type": "command", "argv": [sys.executable, "-c", code]}]}])
     FakeWorker.responses = [output()]
@@ -149,9 +149,13 @@ async def test_stale_duplicate_and_wrong_run_approvals_are_rejected(app, tmp_pat
     for run, review in (("wrong-run", token), (run_id, "old-token"), (run_id, None)):
         result = await app.handle({"op": "control", "action": "approve", "run_id": run, "review_id": review})
         assert not result["ok"] and not app.review.done() and app.store.state["history"] == []
-    command = {"op": "control", "action": "approve", "run_id": run_id, "review_id": token}
+    command = {"op": "control", "action": "approve", "run_id": run_id, "review_id": token,
+               "source": "phone", "request_id": "duplicate-phone-test"}
     assert (await app.handle(command))["ok"]
+    before = len(app.events)
     assert not (await app.handle(command))["ok"]
+    assert not any(e["type"] == "error" for e in app.events[before:])
+    assert any(e["type"] == "command_result" and not e["ok"] for e in app.events[before:])
     await app.task
     events = [json.loads(l) for l in (app.store.path / "events.jsonl").read_text().splitlines()]
     assert len([e for e in events if e["type"] == "review_decision"]) == 1

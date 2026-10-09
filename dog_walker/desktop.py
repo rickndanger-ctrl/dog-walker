@@ -259,7 +259,10 @@ class Desktop:
             await self.command(cmd)
         except (WalkerError, OSError, ValueError, TypeError) as exc:
             result = {"ok": False, "message": str(exc)}
-            self.send("error", message=str(exc))
+            # Remote callers receive their own acknowledgment. A rejected phone
+            # tap must not leave a misleading global error on the desktop.
+            if not isinstance(cmd, dict) or cmd.get("source") != "phone":
+                self.send("error", message=str(exc))
         if isinstance(cmd, dict) and isinstance(cmd.get("request_id"), str) and len(cmd["request_id"]) <= 80:
             self.send("command_result", request_id=cmd["request_id"], **result)
         return result

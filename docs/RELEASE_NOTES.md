@@ -1,3 +1,13 @@
+# Source update · Ordinary folders and local-only work
+
+- Select an ordinary or empty project folder without Git setup. Protected copy snapshots current files, including uncommitted work, into an independent workspace with local starting history and no source remotes or hooks.
+- Current-folder mode prepares missing local Git history automatically. Existing repositories and their remotes are preserved, while worker and verification commands have network access disabled.
+- Verification fails closed when its Codex sandbox is unavailable; publishing credentials and SSH-agent variables are removed from child environments. Real sandbox checks deny sockets and Git push to a reachable HTTP test server while permitting local file work.
+- Give an agent the form and task, then import its completed file yourself or have it save directly to Dog Walker's Inbox. Depositing/importing remains inert; review and Start stay explicit.
+- A rejected phone tap returns an error to that phone without leaving a misleading desktop error. Resuming clears obsolete pause reasons.
+- A fresh real-model run from a folder without Git completed in four turns (one authored correction), passed three project tests, reopened without replay, and completed through paired HTTP approval. The original stayed without Git; the copy had no remotes.
+- The full automated suite passes 178 tests. Earlier release verification remains below as historical evidence.
+
 # 0.3.0 · Desktop and private phone preview
 
 Dog Walker now has an optional installable phone companion over private Tailscale HTTPS. Pair from the desktop to monitor progress and evidence, approve or retry a checkpoint, pause, and resume. The computer retains control of the worker and saved-run locks.

@@ -84,6 +84,19 @@ def scope_check(root, allowed, baseline):
             "detail": "Changes outside the allowed files: " + ", ".join(changed) if changed else "All tracked and non-ignored file changes stay within the job's allowed files"}
 
 
+def prepare_local_history(root):
+    """Create a local baseline when needed; never configure a remote or push."""
+    if not (root / ".git").exists():
+        git(root, "init", "--template=", "-q")
+        git(root, "config", "push.default", "nothing")
+    head = subprocess.run(["git", "-C", str(root), "rev-parse", "--verify", "HEAD"], capture_output=True)
+    if head.returncode:
+        git(root, "add", "--all")
+        git(root, "-c", "core.hooksPath=/dev/null", "-c", "commit.gpgsign=false",
+            "-c", "user.name=Dog Walker Local", "-c", "user.email=local@dog-walker.invalid",
+            "commit", "--allow-empty", "-qm", "Local starting point for Dog Walker")
+
+
 class Store:
     def __init__(self, path):
         self.path = Path(path).resolve()
@@ -95,8 +108,8 @@ class Store:
         root = Path(root).expanduser().resolve()
         if not root.is_dir():
             raise WalkerError(f"Project folder does not exist: {root}")
-        if not in_place and git(root, "status", "--porcelain"):
-            raise WalkerError("Project has uncommitted files. Commit them first or use --in-place to work on the current files.")
+        if DATA.resolve().is_relative_to(root):
+            raise WalkerError("Choose a dedicated project folder that does not contain Dog Walker's run-data folder")
         ident = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ-") + uuid4().hex[:8]
         path = DATA / "runs" / ident
         path.mkdir(parents=True, mode=0o700)
@@ -113,10 +126,14 @@ class Store:
         work = root
         if not in_place:
             work = path / "workspace"
-            git(root, "worktree", "add", "--detach", str(work), "HEAD")
+            # Copy current files, including uncommitted work, without source Git
+            # metadata, hooks, credentials, or remotes. Do not follow symlinks.
+            shutil.copytree(root, work, symlinks=True, ignore=shutil.ignore_patterns(".git"))
+        prepare_local_history(work)
         files = {c["path"] for s in workflow.steps.values() for c in s["checks"] if c["type"] == "unchanged"}
         state = dict(id=ident, name=workflow.name, original_root=str(root), root=str(work),
-                     in_place=in_place, step=workflow.entry, phase="pending", status="ready", session=None,
+                     in_place=in_place, workspace_kind="current_folder" if in_place else "local_copy",
+                     step=workflow.entry, phase="pending", status="ready", session=None,
                      auto=auto, attempts=0, turns=0, history=[], result=None, evaluation=None,
                      hashes={f: digest(work / f) for f in files}, created=datetime.now(timezone.utc).isoformat())
         if "allowed_changes" in workflow.data:

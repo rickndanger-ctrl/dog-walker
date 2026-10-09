@@ -264,7 +264,7 @@ ShellRoot {
                                     anchors.fill: parent; anchors.margins: 20; spacing: 10
                                     Copy { text: "01  /  LET YOUR AGENT PREPARE IT"; font.pixelSize: 10; font.letterSpacing: 1; color: "#81907c" }
                                     Copy { text: "The official job form"; font.pixelSize: 18; font.weight: Font.DemiBold }
-                                    Copy { Layout.fillWidth: true; text: "Hand your agent the form and instructions. It returns a plan Dog Walker understands."; color: "#738073"; font.pixelSize: 12 }
+                                    Copy { Layout.fillWidth: true; text: "Give your agent the form and your task. Import its completed file, or ask the agent to save it directly into Dog Walker's Inbox."; color: "#738073"; font.pixelSize: 12 }
                                     ActionButton { text: "Agent form  ↗"; onClicked: app.openPath(app.appRoot + "/forms") }
                                 }
                             }
@@ -325,8 +325,9 @@ ShellRoot {
                                 }
                                 RowLayout {
                                     Switch { id: placeSwitch; checked: app.inPlace; onToggled: app.inPlace = checked }
-                                    Copy { Layout.fillWidth: true; text: app.inPlace ? "Current folder  ·  edits your selected files directly" : "Protected copy  ·  requires a clean, committed Git project"; color: app.inPlace ? "#a66b35" : "#738073"; font.pixelSize: 12 }
+                                    Copy { Layout.fillWidth: true; text: app.inPlace ? "Current folder  ·  edits selected files; adds local Git history if needed" : "Protected copy  ·  accepts any project folder; keeps your original unchanged"; color: app.inPlace ? "#a66b35" : "#738073"; font.pixelSize: 12 }
                                 }
+                                Copy { Layout.fillWidth: true; text: "Git history is prepared locally for checks and recovery. No GitHub account or remote is needed. Worker and verification commands run with network access disabled."; font.pixelSize: 12; color: "#738073" }
                                 RowLayout {
                                     Layout.fillWidth: true
                                     Copy { Layout.fillWidth: true; text: "Nothing runs until you press Start. The first model step can take a few minutes."; color: "#849080"; font.pixelSize: 11 }
@@ -453,9 +454,9 @@ ShellRoot {
                     Copy { Layout.fillWidth: true; text: "You choose the job. Dog Walker checks each step and asks for your decision when needed."; font.pixelSize: 15 }
                     Repeater {
                         model: [
-                            {title: "1. Get a completed job form", body: "Click Agent form on New walk. Give your agent JOB_FORM.dogwalk, AGENT_HANDOFF.md, and your task. Ask it to return one completed .dogwalk file. The blank template cannot run. A prepared test form is ready to import directly."},
+                            {title: "1. Give your agent the form and task", body: "Click Agent form on New walk. Give your agent JOB_FORM.dogwalk, AGENT_HANDOFF.md, and your task. Ask it to return one completed .dogwalk file, or save it directly to ~/Documents/Dog Walker/Inbox. The blank template cannot run. A prepared test form is ready to import directly."},
                             {title: "2. Import and review", body: "Choose a file, drop it on New walk, or select it from Inbox. Read the goal, allowed files, steps, review checkpoints, and commands. Use Read full plan for details. Importing a form does not start work."},
-                            {title: "3. Choose the matching project", body: "Click Choose folder and select the folder containing the files named in the form. Leave Protected copy selected to work in a separate Git workspace; the project must be clean and committed. Current folder edits the selected project directly."},
+                            {title: "3. Choose any matching project folder", body: "Click Choose folder and select the folder containing the files named in the form. You do not need to set up Git. Protected copy copies the current files and creates local history in its separate workspace; your original folder stays unchanged. Current folder edits your selected project and adds local history if needed. Nothing is connected to GitHub; worker and verification commands have network access disabled."},
                             {title: "4. Start and watch", body: "Keep Auto walk on to advance checked steps, then press Start walk once. The first local-model step can take a few minutes. Progress and Show details explain what is happening. Keep the computer awake and this app open. Pause walk stops work and retains partial edits."},
                             {title: "5. Review on desktop or phone", body: "When Needs your review appears, read the summary and checks. Approve & continue accepts this checkpoint; checks run again before advancing. Retry step requests the authored correction. Failed checks require a correction and cannot be approved away. For your phone, enable Tailscale on both devices, open Phone companion here, visit its address, and pair. Your phone shows this same walk and review."},
                             {title: "6. Check the result or resume later", body: "Walk complete shows the outcome and final checks. Open results opens the workspace containing the edits. In Protected copy mode, review and copy or merge wanted changes yourself; the original project is not silently replaced. To continue a paused walk, use Saved walks → Open → Resume walk. An interrupted step needs an explicit retry."}

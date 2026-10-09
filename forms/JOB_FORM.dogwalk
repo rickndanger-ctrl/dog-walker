@@ -7,6 +7,7 @@ allowed_changes:
 constraints:
   - LIMIT_CHANGES_TO_THE_REQUESTED_SCOPE
   - DO_NOT_INSTALL_PACKAGES_OR_USE_THE_INTERNET
+  - Do not push or publish the project. Work locally only.
 mode: auto
 max_turns: 15
 steps:

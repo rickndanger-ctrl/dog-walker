@@ -86,6 +86,7 @@ async def test_resume_review_does_not_resend_completed_turn(tmp_path, monkeypatc
     resumed = Store(store.path)
     await Engine(resumed, lambda x: None, approved, worker_factory=FakeWorker).run()
     assert resumed.state["status"] == "completed"
+    assert resumed.state["reason"] is None
     assert len(FakeWorker.prompts) == 1
 
 

@@ -21,7 +21,7 @@ import time
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def run(recover=None, resume=None, phone=False):
+def run(recover=None, resume=None, phone=False, plain_project=False):
     artifacts = ROOT / "artifacts"
     artifacts.mkdir(exist_ok=True)
     data = Path(recover or resume).resolve() if recover or resume else Path(tempfile.mkdtemp(prefix="desktop-acceptance-", dir=artifacts))
@@ -55,6 +55,8 @@ def run(recover=None, resume=None, phone=False):
 
     model_ready()  # Refuse a missing or mismatched server before starting.
     project = Path(recovered.state["original_root"]) if recovered else fixture()
+    if plain_project and not recovered:
+        shutil.rmtree(project / ".git")
     original = {p.name: p.read_bytes() for p in project.glob("*.py")}
     settings = load_settings()
     settings["start_command"] = []  # Reuse the existing model; never launch a second one.
@@ -66,6 +68,7 @@ def run(recover=None, resume=None, phone=False):
            "QT_QPA_PLATFORMTHEME": "", "QT_QUICK_CONTROLS_STYLE": "Basic",
            "QT_QUICK_BACKEND": "software"}
     report = {"data": str(data), "network_isolated": False,
+              "project_started_without_git": not (project / ".git").exists(),
               "test_harness_format_recovery": bool(recovered and any(e["type"] == "test_harness_result_recovery" for e in events)),
               "automation": "Temporary QML test IPC invokes actual button handlers",
               "scripted_approvals": []}
@@ -231,7 +234,11 @@ def run(recover=None, resume=None, phone=False):
                 tests = subprocess.run([sys.executable, "-m", "unittest", "-v"],
                                        cwd=workspace, capture_output=True, text=True)
                 assert tests.returncode == 0, tests.stdout + tests.stderr
+                assert subprocess.check_output(["git", "-C", str(workspace), "remote"]).strip() == b""
+                if report["project_started_without_git"]:
+                    assert not (project / ".git").exists(), "Protected copy must not add Git to the original folder"
                 report.update(original_unchanged=True, protected_tests_unchanged=True,
+                              local_workspace_has_no_remotes=True,
                               test_output=tests.stdout + tests.stderr)
                 image = artifacts / "desktop-complete.png"
                 ipc("capture", str(image))
@@ -253,5 +260,6 @@ if __name__ == "__main__":
     parser.add_argument("--recover-format", help="Test-only recovery of a completed malformed-envelope result in a prior harness data directory")
     parser.add_argument("--resume-data", help="Continue a paused harness review without replaying model turns")
     parser.add_argument("--phone", action="store_true", help="Approve final review through the paired phone HTTP server and real desktop IPC")
+    parser.add_argument("--plain-project", action="store_true", help="Start with an ordinary folder without Git")
     args = parser.parse_args()
-    run(args.recover_format, args.resume_data, args.phone)
+    run(args.recover_format, args.resume_data, args.phone, args.plain_project)

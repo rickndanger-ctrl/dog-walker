@@ -35,6 +35,7 @@ Inspect actual files before editing. Use shell tools to read, edit, and test in 
 Return exactly the requested JSON object, with short evidence backed by actual tool results.
 Use status=blocked and list blockers when you cannot complete the step. Do not invent command results.
 Do not fetch internet resources, install packages, use cloud tools, or perform actions outside this workspace.
+Never push, publish, create GitHub repositories, or add Git remotes. Git history is local and managed by Dog Walker.
 """
 
 
@@ -65,10 +66,11 @@ def parse_result(text):
 def environment():
     env = dict(os.environ)
     for key in list(env):
-        if any(x in key.upper() for x in ("API_KEY", "ACCESS_TOKEN", "AUTH_TOKEN")) or key.lower() in {"http_proxy", "https_proxy", "all_proxy"}:
+        if any(x in key.upper() for x in ("API_KEY", "TOKEN")) or key.upper() in {"SSH_AUTH_SOCK", "GIT_ASKPASS", "SSH_ASKPASS"} or key.lower() in {"http_proxy", "https_proxy", "all_proxy"}:
             env.pop(key)
     env.update(CODEX_HOME=str(DATA / "codex-home"), HF_HUB_OFFLINE="1", TRANSFORMERS_OFFLINE="1",
-               HF_HUB_DISABLE_TELEMETRY="1", DO_NOT_TRACK="1", NO_PROXY="127.0.0.1,localhost", USE_TF="0")
+               HF_HUB_DISABLE_TELEMETRY="1", DO_NOT_TRACK="1", NO_PROXY="127.0.0.1,localhost", USE_TF="0",
+               GIT_TERMINAL_PROMPT="0", GCM_INTERACTIVE="never", GIT_CONFIG_GLOBAL="/dev/null", GIT_CONFIG_NOSYSTEM="1")
     return env
 
 
@@ -90,6 +92,9 @@ approval_policy = "never"
 sandbox_mode = "workspace-write"
 web_search = "disabled"
 check_for_update_on_startup = false
+
+[sandbox_workspace_write]
+network_access = false
 
 [model_providers.ornith_local]
 name = "Dog Walker Local Ornith"
@@ -175,7 +180,8 @@ class CodexWorker:
         schema = turn_dir / "schema.json"
         atomic_json(schema, SCHEMA)
         answer_file = turn_dir / "answer.json"
-        argv = [shutil.which("codex"), "--no-daemon", "exec"]
+        argv = [shutil.which("codex"), "--no-daemon", "-c", 'sandbox_mode="workspace-write"',
+                "-c", "sandbox_workspace_write.network_access=false", "exec"]
         if state["session"]:
             argv += ["resume", state["session"]]
         else:
