@@ -1,5 +1,16 @@
 "use strict";
 const $ = id => document.getElementById(id);
+function setTheme(theme) {
+  const light = theme === "light";
+  document.documentElement.dataset.theme = light ? "light" : "dark";
+  $("theme-toggle").textContent = light ? "Dark" : "Light";
+  document.querySelector('meta[name="theme-color"]').content = light ? "#ffffff" : "#101010";
+  try { localStorage.setItem("dog-walk-theme", light ? "light" : "dark"); } catch (_) {}
+}
+let savedTheme;
+try { savedTheme = localStorage.getItem("dog-walk-theme"); } catch (_) {}
+setTheme(savedTheme || (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark"));
+$("theme-toggle").addEventListener("click", () => setTheme(document.documentElement.dataset.theme === "light" ? "dark" : "light"));
 let current = null, csrf = "", busy = false, paired = false, timer;
 function message(text, error = false) { $("message").textContent = text; $("message").classList.toggle("error", error); }
 function list(id, rows) { const parent = $(id); parent.replaceChildren(); for (const row of rows) { const li = document.createElement("li"); li.textContent = row.text; if (row.className) li.className = row.className; parent.appendChild(li); } }
@@ -18,7 +29,7 @@ function render(data) {
   $("pair").hidden = true; $("dashboard").hidden = false;
   const s = current.state, job = current.job || s?.job;
   $("connection").textContent = current.connected ? "Connected privately" : "Desktop closed";
-  $("headline").textContent = current.review ? "A hand on the leash." : s?.status === "completed" ? "Walk complete." : "Your walk, in view.";
+  $("headline").textContent = current.review ? "Review needed" : s?.status === "completed" ? "Walk complete" : "Walk status";
   $("job-name").textContent = s?.name || "No walk selected";
   $("turns").textContent = s ? `${s.turns} model turns` : "";
   const steps = job?.steps || [], history = s?.history || [];

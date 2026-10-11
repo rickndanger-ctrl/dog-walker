@@ -13,3 +13,31 @@ Optional phone access runs behind Tailscale Serve, accepts only its configured o
 The file allowlist detects persistent changes to tracked and non-ignored workspace files, including unexpected additions, deletions, renames, and symlink replacement. It does not police ignored files, transient edits later reverted, or activity outside the workspace. Keep protected-file checks and the coding harness's sandbox enabled; this application is not an adversarial-code sandbox.
 
 Git setup and initial baseline commits are local controller operations. Protected copies exclude source Git metadata, hooks, and remotes. Current-folder mode preserves existing repository configuration but adds local history when it is missing. Publishing credentials and SSH agent variables are removed from child environments, global Git credential configuration is disabled there, and worker instructions prohibit remotes, pushes, and publication. Verified sandbox tests demonstrate local writes working while socket creation and a Git push to a reachable test HTTP server are denied. This is the installed Codex sandbox boundary, not a guarantee against a sandbox escape or privileged local software.
+
+
+Optional job-scoped plugins expose only requested tool sets through MCP. Built-in
+readers bound paths to the selected workspace or configured existing vault.
+Browser inspection uses a fresh profile and exact configured origins; the
+default origin list is empty. Tool calls are recorded and successful built-in
+receipts can be required at checkpoints. Laya recommendations are advisory and
+cannot grant tools or override checks. Custom stdio MCP servers are trusted
+user-installed code outside the shell sandbox, so review their implementations
+and expose only needed tools. Connected tools do not inherit ChatGPT app
+credentials. See [plugin boundaries and configuration](docs/PLUGINS.md).
+
+Chat uses a separate local Codex home and the read-only sandbox. Project selection
+guides what the model should read; it is not a hard read-access boundary for the
+shell. Chat instructions prohibit unrelated folders and credential files. No
+plugin process is launched merely by choosing tools or generating a draft.
+Generated forms must pass the existing schema/workflow/grant validation, declare
+allowed changes, and retain a final review checkpoint. Start and all subsequent
+verification/review decisions use the existing engine.
+
+Conversations and attached text/images are saved locally and can contain private
+information. Text credential redaction does not sanitize pixels in photographs.
+Removing an active attachment excludes it from future model input, while earlier
+message snapshots remain saved. See [chat limits and storage](docs/CHAT.md).
+
+## Optional hosted decision routing
+
+Handler defaults to local Laya for bounded read-only project preparation. A separately configured, explicitly enabled TypeSafe Jev connection can send up to 4,000 characters of the task prompt and finite routing options to the official provider. Key setup and synthetic testing alone do not enable this. The owner-only key file is outside the project, excluded from chat/form exports, and not forwarded to Codex or plugins. The client disables proxies and redirects, limits responses and socket wait time, and exposes sanitized errors. Provider uncertainty/errors return to the main worker with its original grants; provider decisions never authorize writes or pass verification checks. Main-model generation remains local. The private setup terminal explains data transfer before enabling real-work routing.

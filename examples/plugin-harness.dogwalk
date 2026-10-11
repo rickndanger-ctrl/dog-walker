@@ -1,0 +1,36 @@
+dog_walker: 1
+name: Try the plugin harness
+goal: Exercise project, browser and connected-vault tools in one read-only walk and review actual tool receipts.
+plugins: [project, browser, obsidian]
+allowed_changes: []
+constraints:
+- Read only. Do not edit the project, vault, desktop or plugin settings.
+- Use installed tools. Do not install packages or publish anything.
+- Inspect the local HTML file; this test requires no enabled web origins.
+mode: auto
+max_turns: 3
+steps:
+- id: inspect
+  title: Try all three plugin categories
+  prompt: >-
+    Use the actual Dog Walker MCP tools, not shell substitutes.
+    Call project_list and project_read to read README.md.
+    Call obsidian_read on Mission-Control/AGENT_SHARED_MEMORY.md, then
+    obsidian_search for "Dog Walker" in folder Mission-Control.
+    Call browser_inspect with path index.html, width 390 and height 844.
+    Report actual title, visible text, horizontalOverflow and page errors.
+    You may call recommend_tool once to ask Laya for advice, but a recommendation
+    is not required to use the granted tools. If it reports uncertainty, choose
+    the tool using its description. Do not edit files. Report a blocked result
+    if a required tool or connected vault is unavailable; do not invent success.
+  success_criteria:
+  - Actual successful project, browser and vault tool receipts exist.
+  - The project is unchanged and the summary describes observed results honestly.
+  checks:
+  - {type: tool_called, tool: project_read, id: project-tool-used}
+  - {type: tool_called, tool: obsidian_read, id: vault-tool-used}
+  - {type: tool_called, tool: browser_inspect, id: browser-tool-used}
+  - {type: no_changes, id: project-unchanged}
+  approval: true
+  max_retries: 1
+  retry_prompt: Recheck the unavailable or failed tools and use the actual MCP functions. Preserve all files. If a runtime is missing, report the blocker instead of installing it.

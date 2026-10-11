@@ -11,7 +11,7 @@ from .judge import LocalJudge, classify
 from .worker import CodexWorker
 
 
-def run_checks(checks, root, result, commands, hashes, stopped=None):
+def run_checks(checks, root, result, commands, hashes, stopped=None, tool_calls=None):
     rows = []
     protected_violation = False
     for check in checks:
@@ -73,6 +73,8 @@ def run_checks(checks, root, result, commands, hashes, stopped=None):
                 row["pass"] = check["text"].lower() in json.dumps(result).lower()
             elif typ == "command_executed":
                 row["pass"] = any(check["text"] in c.get("command", "") and c.get("exit_code") == 0 for c in commands)
+            elif typ == "tool_called":
+                row["pass"] = any(c.get("tool") == check["tool"] and c.get("result", {}).get("isError") is False for c in (tool_calls or []))
             elif typ == "no_changes":
                 row["pass"] = not git(root, "status", "--porcelain")
             if not row["detail"]:
@@ -114,7 +116,9 @@ class Engine:
             if not scope["pass"]:
                 return [scope]
         stopped = threading.Event()
-        task = asyncio.create_task(asyncio.to_thread(run_checks, spec["checks"], Path(self.store.state["root"]), result, commands, self.store.state["hashes"], stopped))
+        from .plugins import tool_events
+        calls = tool_events(self.store) if any(c["type"] == "tool_called" for c in spec["checks"]) else []
+        task = asyncio.create_task(asyncio.to_thread(run_checks, spec["checks"], Path(self.store.state["root"]), result, commands, self.store.state["hashes"], stopped, calls))
         try:
             checks = await asyncio.shield(task)
         except asyncio.CancelledError:
@@ -196,6 +200,10 @@ class Engine:
                 # Project files may have changed while the run was paused. Recheck without replaying the worker.
                 self.store.save(phase="evaluating")
             self.store.save(status="running", reason=None)
+            from .plugins import freeze_plugins
+            plugins = freeze_plugins(self.store)
+            if plugins:
+                self.log("Granted plugins: " + ", ".join(p["name"] for p in plugins))
             await self.worker.ready()
             while not self.cancelled:
                 ident = s["step"]
@@ -224,7 +232,19 @@ class Engine:
                         previous_result=json.dumps(s.get("previous_result") or {}, ensure_ascii=False),
                         failed_checks="\n".join(failed))
                     self.edit = None
-                    prompt += "\n\nReturn only this JSON shape: {\"status\":\"completed\" or \"blocked\",\"summary\":\"concise summary\",\"evidence\":[\"actual evidence\"],\"files_changed\":[\"paths\"],\"blockers\":[]}. Keep the summary under 1400 characters."
+                    # Optional read-only preparation uses frozen grants, never verification
+                    # receipts. The main worker retains every granted tool on fallback.
+                    from .routing import route_context
+                    read_tools = ("project_map", "project_search") if any(p["adapter"] == "project" for p in plugins) else ()
+                    if read_tools:
+                        routed = await route_context(prompt, s["root"], read_tools)
+                        self.store.event("context_routing", step=ident, status=routed.status,
+                                         tool=routed.tool, confidence=routed.confidence)
+                        if routed.context:
+                            prompt += routed.context
+                    prompt += "\n\nReturn an honest completion report in the worker's required JSON format, backed by actual tool results."
+                    from .helper import take_guidance
+                    prompt += take_guidance(self.store)
                     self.store.save(phase="running", turns=s["turns"] + 1, attempts=s["attempts"] + 1, reason=None)
                     self.log(f"\nStep: {ident} • attempt {s['attempts']}\n{prompt}")
                     try:

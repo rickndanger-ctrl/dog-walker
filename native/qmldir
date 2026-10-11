@@ -1,0 +1,12 @@
+singleton Theme 1.0 Theme.qml
+ChatPane 1.0 ChatPane.qml
+NavButton 1.0 NavButton.qml
+MonoPalette 1.0 MonoPalette.qml
+Paper 1.0 Paper.qml
+Copy 1.0 Copy.qml
+ActionButton 1.0 ActionButton.qml
+WalkSetup 1.0 WalkSetup.qml
+
+WalkWorkspace 1.0 WalkWorkspace.qml
+AgentWorkspace 1.0 AgentWorkspace.qml
+TerminalPane 1.0 TerminalPane.qml

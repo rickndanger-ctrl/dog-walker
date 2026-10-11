@@ -23,7 +23,7 @@ def fixture():
             shutil.copy2(f, root / f.name)
     git(root, "init", "-q")
     git(root, "add", ".")
-    git(root, "-c", "user.name=Dog Walker Demo", "-c", "user.email=demo@localhost", "commit", "-qm", "Disposable fixture")
+    git(root, "-c", "user.name=Handler Demo", "-c", "user.email=demo@localhost", "commit", "-qm", "Disposable fixture")
     return root
 
 
@@ -71,8 +71,13 @@ async def plain(store, no_start):
 
 def main(argv=None):
     os.umask(0o077)
-    parser = argparse.ArgumentParser(description="Dog Walker — offline prompt-sequence supervisor for local models. With no arguments, open the native desktop when Quickshell is installed.")
+    arguments = list(sys.argv[1:] if argv is None else argv)
+    if arguments and arguments[0] == "decide":
+        from .decisions import main as decide
+        return decide(arguments[1:])
+    parser = argparse.ArgumentParser(description="Handler — local model chat and verified work plans. With no arguments, open the native desktop when Quickshell is installed.")
     sub = parser.add_subparsers(dest="command")
+    sub.add_parser("decide", help="Local Laya / explicit Jev decision menu and commands")
     desktop = sub.add_parser("desktop", help="Open the native desktop app")
     desktop.add_argument("file", nargs="?", default="")
     form = sub.add_parser("validate-form", help="Validate an official single-file job form without running it")
@@ -97,6 +102,9 @@ def main(argv=None):
     doc = sub.add_parser("doctor", help="Check local prerequisites and run the judge smoke test")
     doc.add_argument("--offline", action="store_true")
     sub.add_parser("runs", help="List saved runs")
+    sub.add_parser("plugins", help="List installed plugin manifests without starting tools")
+    plugin_add = sub.add_parser("plugin-add", help="Install a trusted local JSON plugin manifest without executing it")
+    plugin_add.add_argument("manifest")
     args = parser.parse_args(argv)
     try:
         if args.command == "desktop" or args.command is None and shutil.which("quickshell"):
@@ -123,6 +131,21 @@ def main(argv=None):
                 s = json.loads(path.read_text())
                 print(f"{s['id']}  {s['status']:10}  {s['name']}  step={s['step']}")
             return 0
+        if args.command == "plugins":
+            from .plugins import registry
+            print(json.dumps(list(registry().values()), indent=2))
+            return 0
+        if args.command == "plugin-add":
+            from .plugins import PLUGIN_DIR, validate_plugin
+            from .storage import atomic_json
+            source = Path(args.manifest)
+            if source.stat().st_size > 64 * 1024:
+                raise WalkerError("Plugin manifests must be smaller than 64 KB")
+            plugin = validate_plugin(json.loads(source.read_text()))
+            PLUGIN_DIR.mkdir(parents=True, exist_ok=True, mode=0o700)
+            atomic_json(PLUGIN_DIR / (plugin["id"] + ".json"), plugin)
+            print(f"Installed {plugin['name']} ({plugin['id']}). No tools were started. New jobs must request it explicitly.")
+            return 0
         if args.command == "resume":
             store = Store.open(args.run_id)
             if args.auto:
@@ -145,7 +168,7 @@ def main(argv=None):
             Dashboard(store, getattr(args, "no_start", False)).run()
         return 0 if store.state["status"] == "completed" else 2
     except (WalkerError, OSError, ValueError) as exc:
-        print(f"Dog Walker: {exc}", file=sys.stderr)
+        print(f"Handler: {exc}", file=sys.stderr)
         return 1
     except KeyboardInterrupt:
         print("\nPaused. Run dog-walker runs to find the saved run.")

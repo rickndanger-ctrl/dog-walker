@@ -1,7 +1,10 @@
 """The portable, agent-fillable .dogwalk contract. Import never executes a job."""
 import hashlib
 import json
+import os
 from pathlib import Path
+import re
+import stat
 import tempfile
 import yaml
 from jsonschema import Draft202012Validator
@@ -9,6 +12,14 @@ from .storage import APP_ROOT, DATA
 from .workflow import WalkerError, load_workflow
 
 MAX_BYTES = 256 * 1024
+MARKDOWN_BRIEF_MAX_BYTES = MAX_BYTES
+
+_MARKDOWN_FENCE = re.compile(
+    r"(?ims)^[ \t]*(?P<fence>`{3,}|~{3,})[ \t]*"
+    r"(?P<language>yaml|yml|dogwalk|handler)(?:[ \t]+[^\r\n]*)?\r?\n"
+    r"(?P<body>.*?)^[ \t]*(?P=fence)[ \t]*$"
+)
+_MARKDOWN_HEADING = re.compile(r"(?m)^\s{0,3}#\s+(.+?)\s*#*\s*$")
 
 
 class UniqueLoader(yaml.SafeLoader):
@@ -26,6 +37,80 @@ def unique_mapping(loader, node, deep=False):
 
 
 UniqueLoader.add_constructor(yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, unique_mapping)
+
+
+def read_markdown_brief(path):
+    """Read a bounded Markdown drop as planning input, or recognize a valid embedded form.
+
+    The return value is a plain dict suitable for the desktop protocol. ``kind`` is
+    ``"handler_form"`` only when a labeled YAML fence passes the official form
+    parser; otherwise the Markdown remains an ordinary planning brief.
+    """
+    source = Path(path).expanduser()
+    if source.suffix.lower() != ".md":
+        raise WalkerError("Choose a Markdown (.md) file")
+    try:
+        info = source.lstat()
+        if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode):
+            raise WalkerError("Markdown briefs must be regular files, not symlinks")
+        if info.st_size > MARKDOWN_BRIEF_MAX_BYTES:
+            raise WalkerError("Markdown briefs must be smaller than 256 KB")
+        flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+        fd = os.open(source, flags)
+        try:
+            opened = os.fstat(fd)
+            if not stat.S_ISREG(opened.st_mode):
+                raise WalkerError("Markdown briefs must be regular files, not symlinks")
+            if opened.st_size > MARKDOWN_BRIEF_MAX_BYTES:
+                raise WalkerError("Markdown briefs must be smaller than 256 KB")
+            with os.fdopen(fd, "rb") as handle:
+                fd = -1
+                content = handle.read(MARKDOWN_BRIEF_MAX_BYTES + 1)
+        finally:
+            if fd >= 0:
+                os.close(fd)
+    except WalkerError:
+        raise
+    except OSError as exc:
+        # Keep OS errors (which may include private path details) out of logs/UI.
+        raise WalkerError("Cannot read this Markdown brief") from exc
+
+    if len(content) > MARKDOWN_BRIEF_MAX_BYTES:
+        raise WalkerError("Markdown briefs must be smaller than 256 KB")
+    try:
+        text = content.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise WalkerError("Markdown briefs must be UTF-8 text") from exc
+    if any(ord(char) < 32 and char not in "\t\n\r" for char in text):
+        raise WalkerError("Markdown briefs must be UTF-8 text")
+
+    title_match = _MARKDOWN_HEADING.search(text)
+    title = (title_match.group(1).strip() if title_match else source.stem).replace("\n", " ")[:160]
+    folder = re.sub(r"[^a-z0-9_-]+", "-", title.lower()).strip("-_")[:60] or "markdown-brief"
+    result = {
+        "kind": "brief",
+        "source": str(source),
+        "text": text,
+        "title": title or "Markdown brief",
+        "suggested_folder": folder,
+        "form_text": None,
+        "form": None,
+    }
+    for match in _MARKDOWN_FENCE.finditer(text):
+        form_text = match.group("body")
+        try:
+            data = parse_form(form_text)
+        except WalkerError:
+            continue
+        result.update(kind="handler_form", form_text=form_text, form=data)
+        # The official form title is authoritative when the Markdown has no heading.
+        if not title_match:
+            result["title"] = data["name"][:160]
+            result["suggested_folder"] = re.sub(
+                r"[^a-z0-9_-]+", "-", data["name"].lower()
+            ).strip("-_")[:60] or "markdown-brief"
+        break
+    return result
 
 
 def parse_form(text):
@@ -95,6 +180,8 @@ def compile_form(text):
     workflow = {"version": 1, "name": data["name"], "max_turns": data.get("max_turns", 40), "steps": steps}
     if "allowed_changes" in data:
         workflow["allowed_changes"] = data["allowed_changes"]
+    if "plugins" in data:
+        workflow["plugins"] = data["plugins"]
     (root / "workflow.yaml").write_text(yaml.safe_dump(workflow, sort_keys=False))
     (root / "source.dogwalk").write_text(text)
     compiled = load_workflow(root)
@@ -103,7 +190,13 @@ def compile_form(text):
 
 def preview(data):
     checks = [c for s in data["steps"] for c in s.get("checks", [])]
-    return {"name": data["name"], "goal": data["goal"], "constraints": data["constraints"],
+    from .plugins import resolve_plugins
+    plugins = resolve_plugins(data.get("plugins", []))
+    constraints = [*data["constraints"]]
+    for plugin in plugins:
+        constraints.append(f"Plugin {plugin['name']} ({plugin['id']}): {plugin['description']} Settings: {json.dumps(plugin['settings'], ensure_ascii=False)}")
+    return {"name": data["name"], "goal": data["goal"], "constraints": constraints,
+            "plugins": plugins,
             "allowed_changes": data.get("allowed_changes"),
             "mode": data.get("mode", "auto"), "steps": [
                 {"id": s["id"], "title": s["title"], "criteria": s["success_criteria"],

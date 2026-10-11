@@ -62,10 +62,16 @@ class Dashboard(App):
         yield Footer()
 
     def on_mount(self):
-        self.set_interval(1, self.refresh_status)
+        self.status_timer = self.set_interval(1, self.refresh_status)
         self.walk_task = asyncio.create_task(self.walk())
 
+    def on_unmount(self):
+        self.status_timer.stop()
+
     def refresh_status(self):
+        # A queued timer can outlive the screen during app shutdown.
+        if not self.query("#status"):
+            return
         s = self.store.state
         self.query_one("#status", Static).update(f"{s['name']}  |  {s['status']}  |  Step: {s['step']}  |  Turn: {s['turns']}\nRun: {s['id']}\nWorkspace: {s['root']}")
         for ident in ("approve", "retry", "edit", "skip"):

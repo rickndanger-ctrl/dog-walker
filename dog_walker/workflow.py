@@ -11,7 +11,7 @@ class WalkerError(Exception):
 
 
 VARIABLES = {"project_root", "step_id", "previous_result", "failed_checks"}
-CHECKS = {"command", "file_exists", "file_contains", "unchanged", "response_contains", "command_executed", "no_changes"}
+CHECKS = {"command", "file_exists", "file_contains", "unchanged", "response_contains", "command_executed", "no_changes", "tool_called"}
 TERMINALS = {"complete", "pause"}
 
 
@@ -73,9 +73,12 @@ def load_workflow(folder) -> Workflow:
         raise WalkerError("workflow.yaml needs version: 1")
     if not isinstance(data.get("name"), str) or not data["name"].strip():
         raise WalkerError("Workflow needs a name")
-    unknown = set(data) - {"version", "name", "entry", "max_turns", "steps", "allowed_changes"}
+    unknown = set(data) - {"version", "name", "entry", "max_turns", "steps", "allowed_changes", "plugins"}
     if unknown:
         raise WalkerError(f"Unknown workflow fields: {sorted(map(str, unknown))}")
+    if "plugins" in data:
+        from .plugins import plugin_ids
+        plugin_ids(data["plugins"])
     if "allowed_changes" in data:
         allowed = data["allowed_changes"]
         if not isinstance(allowed, list) or not all(isinstance(name, str) and name for name in allowed):
@@ -131,6 +134,8 @@ def load_workflow(folder) -> Workflow:
                     raise WalkerError(f"{ident}: command timeout must be 1–1800 seconds")
             if typ in {"file_contains", "response_contains", "command_executed"} and not isinstance(check.get("text"), str):
                 raise WalkerError(f"{ident}: {typ} requires text")
+            if typ == "tool_called" and (not isinstance(check.get("tool"), str) or not re.fullmatch(r"[a-z][a-z0-9_]{0,63}", check["tool"])):
+                raise WalkerError(f"{ident}: tool_called requires a built-in tool name")
         if not isinstance(s["questions"], dict):
             raise WalkerError(f"{ident}: questions must be a mapping")
         for qid, q in s["questions"].items():

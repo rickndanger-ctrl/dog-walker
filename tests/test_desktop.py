@@ -140,3 +140,44 @@ def test_settings_reject_cloud_endpoints():
     for endpoint in ("https://api.openai.com/v1", "http://127.0.0.1.evil.com/v1", "http://user:pass@localhost/v1"):
         with pytest.raises(WalkerError):
             validate_settings({**defaults(), "endpoint": endpoint})
+
+
+@pytest.mark.parametrize("mode", ["review", "drive"])
+async def test_helper_review_keeps_worker_running_and_help_pauses_before_launch(app, tmp_path, monkeypatch, mode):
+    from dog_walker import terminal
+    project = tmp_path / "project"
+    project.mkdir()
+    await app.handle({"op": "import", "text": yaml.safe_dump(form())})
+    app.store = storage.Store.create(app.workflow, project, in_place=True)
+    calls = []
+    task = asyncio.create_task(asyncio.sleep(30))
+    app.task = task
+    original_pause = app.pause
+    async def pause():
+        await original_pause()
+        calls.append("pause")
+    monkeypatch.setattr(app, "pause", pause)
+    monkeypatch.setattr(terminal, "launch_helper", lambda *args: calls.append((args[1], args[2], task.done())))
+    try:
+        await app.command({"op": "terminal", "kind": "helper", "run_id": app.store.state["id"],
+                           "provider": "codex", "mode": mode})
+        assert calls == (["pause", ("codex", "drive", True)] if mode == "drive" else [("codex", "review", False)])
+    finally:
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+
+
+@pytest.mark.parametrize("change", [{"run_id": "wrong"}, {"provider": "other"}, {"mode": "other"}])
+async def test_invalid_helper_selection_never_pauses_or_launches(app, tmp_path, monkeypatch, change):
+    from dog_walker import terminal
+    project = tmp_path / "project"
+    project.mkdir()
+    await app.handle({"op": "import", "text": yaml.safe_dump(form())})
+    app.store = storage.Store.create(app.workflow, project, in_place=True)
+    async def forbidden_pause():
+        pytest.fail("invalid request must not pause")
+    monkeypatch.setattr(app, "pause", forbidden_pause)
+    monkeypatch.setattr(terminal, "launch_helper", lambda *args: pytest.fail("invalid request must not launch"))
+    with pytest.raises(WalkerError):
+        await app.command({"op": "terminal", "kind": "helper", "run_id": app.store.state["id"],
+                           "provider": "codex", "mode": "review", **change})

@@ -46,7 +46,7 @@ def info():
     config = json.loads(CONFIG.read_text())
     key = credentials()
     return {"url": config["origin"], "pair_code": key["pair_code"],
-            "instructions": "Turn on Tailscale on your phone, open this private address, and enter the pairing code. Add Dog Walker to your Home Screen. Keep the desktop app open while a walk is running."}
+            "instructions": "Turn on Tailscale on your phone, open this private address, and enter the pairing code. Add Dog Walk to your Home Screen. Keep the desktop app open while a walk is running."}
 
 
 def ipc(method, *args, pid=None):
@@ -54,7 +54,7 @@ def ipc(method, *args, pid=None):
     result = subprocess.run(["quickshell", "ipc", *selection, "call", "dogwalker", method, *args],
                             capture_output=True, text=True, timeout=5)
     if result.returncode:
-        raise WalkerError("The desktop is unavailable. Open Dog Walker on the computer.")
+        raise WalkerError("The desktop is unavailable. Open Dog Walk on the computer.")
     return result.stdout.strip()
 
 
@@ -115,7 +115,7 @@ class Companion:
             current["state"] = public_state(current.get("state"))
         except (WalkerError, ValueError, subprocess.TimeoutExpired):
             current = {"connected": False, "active": False, "review": False, "state": None,
-                       "reason": "Open Dog Walker on the computer to see or control the current walk."}
+                       "reason": "Open Dog Walk on the computer to see or control the current walk."}
         runs = []
         for path in sorted((self.data / "runs").glob("*/state.json"), reverse=True)[:30]:
             try:
@@ -245,7 +245,7 @@ def main():
     args = parser.parse_args()
     os.umask(0o077)
     httpd = server(json.loads(args.config.read_text()), credentials(), args.port)
-    print("Dog Walker phone companion is listening on loopback behind private Tailscale Serve.", flush=True)
+    print("Dog Walk phone companion is listening on loopback behind private Tailscale Serve.", flush=True)
     try:
         httpd.serve_forever()
     finally:

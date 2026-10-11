@@ -16,15 +16,14 @@ Button {
     contentItem: Text {
         text: control.text
         font: control.font
-        color: control.primary ? "#ffffff" : (control.dark ? "#e4efe9" : (control.danger ? "#a63e35" : "#244e43"))
+        color: control.primary ? (Theme.dark ? "#000000" : "#ffffff") : Theme.text
         horizontalAlignment: Text.AlignHCenter
         verticalAlignment: Text.AlignVCenter
     }
     background: Rectangle {
-        radius: 10
-        color: control.primary ? (control.down ? "#173c32" : (control.hovered ? "#28634f" : "#204e42")) : (control.dark ? (control.hovered ? "#294c41" : "transparent") : (control.hovered ? "#eceee7" : "#ffffff"))
+        radius: 8
+        color: control.primary ? (control.down ? Theme.muted : (control.hovered ? Theme.muted : Theme.accent)) : (control.dark ? (control.hovered ? Theme.elevated : "transparent") : (control.hovered ? Theme.hover : Theme.surface))
         border.width: control.primary || control.dark ? 0 : 1
-        border.color: control.activeFocus ? "#769980" : "#dedfd6"
-        Behavior on color { ColorAnimation { duration: 120 } }
+        border.color: control.activeFocus ? Theme.text : Theme.border
     }
 }

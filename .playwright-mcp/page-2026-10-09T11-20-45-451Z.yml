@@ -1,0 +1,5 @@
+- generic [ref=e1]:
+  - heading "Local browser check" [level=1] [ref=e2]
+  - textbox "Name" [ref=e3]: Ada
+  - button "Greet" [active] [ref=e4]
+  - paragraph [ref=e5]: Hello Ada
